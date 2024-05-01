@@ -1,2 +1,5 @@
 https://gbdev.io/pandocs/CPU_Instruction_Set.html
 https://gbdev.io/
+https://gbdev.gg8.se/wiki/articles/Gameboy_Bootstrap_ROM
+https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#XOR_A,r8
+https://gbdev.io/gb-opcodes/optables/
