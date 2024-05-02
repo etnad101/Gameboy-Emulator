@@ -1,4 +1,3 @@
-
 pub struct Registers {
     pub a: u8,
     pub b: u8,
@@ -14,11 +13,18 @@ impl Registers {
     pub fn new() -> Self {
         let (a, b, c, d, e, f, h, l) = (0, 0, 0, 0, 0, 0, 0, 0);
         Registers {
-            a, b, c, d, e, f, h, l
+            a,
+            b,
+            c,
+            d,
+            e,
+            f,
+            h,
+            l,
         }
     }
 
-    pub fn get_bc(&self) -> u16 {
+    pub fn bc(&self) -> u16 {
         (self.b as u16) << 8 | (self.c as u16)
     }
 
@@ -27,11 +33,29 @@ impl Registers {
         self.c = (value & 0xFF) as u8;
     }
 
+    pub fn de(&self) -> u16 {
+        (self.d as u16) << 8 | (self.e as u16)
+    }
+
+    pub fn set_de(&mut self, value: u16) {
+        self.d = ((value & 0xFF00) >> 8) as u8;
+        self.e = (value & 0xFF) as u8;
+    }
+
+    pub fn hl(&self) -> u16 {
+        (self.h as u16) << 8 | (self.h as u16)
+    }
+
+    pub fn set_hl(&mut self, value: u16) {
+        self.h = ((value & 0xFF00) >> 8) as u8;
+        self.l = (value & 0xFF) as u8;
+    }
+
     pub fn set_z(&mut self) {
         self.f |= 0b0000_0001;
     }
 
-    pub fn clear_z (&mut self) {
+    pub fn clear_z(&mut self) {
         self.f &= 0b1111_1110;
     }
 
@@ -39,16 +63,15 @@ impl Registers {
         self.f |= 0b0000_0010;
     }
 
-    pub fn clear_n (&mut self) {
+    pub fn clear_n(&mut self) {
         self.f &= 0b1111_1101;
     }
 
-    
     pub fn set_h(&mut self) {
         self.f |= 0b0000_0100;
     }
 
-    pub fn clear_h (&mut self) {
+    pub fn clear_h(&mut self) {
         self.f &= 0b1111_1011;
     }
 
@@ -56,7 +79,7 @@ impl Registers {
         self.f |= 0b0000_1000;
     }
 
-    pub fn clear_c (&mut self) {
+    pub fn clear_c(&mut self) {
         self.f &= 0b1111_0111;
     }
 }

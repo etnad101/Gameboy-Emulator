@@ -1,8 +1,8 @@
-mod drivers;
 mod cpu;
+mod drivers;
 
-use std::error::Error;
 use cpu::cpu::CPU;
+use std::error::Error;
 
 use drivers::display::{Display, WHITE};
 
@@ -10,7 +10,6 @@ const WIDTH: usize = 160;
 const HEIGHT: usize = 144;
 
 fn main() -> Result<(), Box<dyn Error>> {
-
     let mut display = Display::new(WIDTH, HEIGHT)?;
 
     let mut cpu = CPU::new();

@@ -1,18 +1,17 @@
+use crate::cpu::opcodes::Register;
 use crate::cpu::registers::Registers;
+use std::collections::HashMap;
+
+use super::opcodes::{self, AddressingMode, Opcode};
 
 const MEM_SIZE: usize = 0xFFFF;
 
 const MAX_CYCLES: usize = 69905;
 
-enum TargetRegister {
-    A,
-    B,
-    C,
-    D,
-    E,
-    H,
-    L,
-    HL
+enum DataType {
+    Address(u16),
+    ValueU8(u8),
+    ValueU16(u16),
 }
 
 struct MemoryBus {
@@ -24,13 +23,18 @@ impl MemoryBus {
         let path = "./DMG_ROM.bin";
         let boot_rom = std::fs::read(path).unwrap();
 
-        let mut memory =  [0; MEM_SIZE];
+        let mut memory = [0; MEM_SIZE];
         memory[0..boot_rom.len()].copy_from_slice(&boot_rom);
         MemoryBus { memory }
     }
 
     pub fn read_u8(&self, addr: u16) -> u8 {
         self.memory[addr as usize]
+    }
+
+    pub fn write_u8(&mut self, addr: u16, value: u8) {
+        // TODO: implement Echo RAM and range checks
+        self.memory[addr as usize] = value;
     }
 
     pub fn read_u16(&self, addr: u16) -> u16 {
@@ -45,6 +49,7 @@ pub struct CPU {
     reg: Registers,
     sp: u16,
     pc: u16,
+    opcodes: HashMap<u8, opcodes::Opcode>,
 }
 
 impl CPU {
@@ -54,42 +59,107 @@ impl CPU {
             reg: Registers::new(),
             sp: 0,
             pc: 0,
+            opcodes: Opcode::generate_map(),
         }
     }
 
-    pub fn update(&mut self) {
-        let mut cycles_this_frame = 0;
-
-        while cycles_this_frame < MAX_CYCLES as u32 {
-            let cycles = self.execute_next_opcode();
-
-            cycles_this_frame += cycles;
-
-            // self.update_timers(cycles);
-
-            // self.update_graphics(cycles);
-
-            // self.do_interupts();
+    fn get_data(&self, addressing_mode: &AddressingMode) -> DataType {
+        match addressing_mode {
+            AddressingMode::ImmediateRegister(register) => match register {
+                Register::A => DataType::ValueU8(self.reg.a),
+                Register::B => DataType::ValueU8(self.reg.b),
+                Register::C => DataType::ValueU8(self.reg.c),
+                Register::D => DataType::ValueU8(self.reg.d),
+                Register::E => DataType::ValueU8(self.reg.e),
+                Register::H => DataType::ValueU8(self.reg.h),
+                Register::L => DataType::ValueU8(self.reg.l),
+                Register::BC => DataType::ValueU16(self.reg.bc()),
+                Register::DE => DataType::ValueU16(self.reg.de()),
+                Register::HL => DataType::ValueU16(self.reg.hl()),
+                Register::SP => DataType::ValueU16(self.sp),
+            },
+            AddressingMode::AddressRegister(register) => match register {
+                Register::HL => DataType::Address(self.reg.hl()),
+                _ => todo!("Address_Register not implemented"),
+            },
+            AddressingMode::ImmediateU8 => DataType::ValueU8(self.memory.read_u8(self.pc + 1)),
+            AddressingMode::JoypadU8 => {
+                todo!("a8 adressing mode not implemented")
+            }
+            AddressingMode::ImmediateI8 => todo!("Immediate_i8 not implemented"),
+            AddressingMode::ImmediateU16 => DataType::ValueU16(self.memory.read_u16(self.pc + 1)),
+            AddressingMode::AdressU16 => DataType::Address(self.memory.read_u16(self.pc + 1)),
         }
+    }
 
-        // self.render_screen();
+    fn load_r16(&mut self, addressing_mode: &AddressingMode, register: Register) {
+        let value = match self.get_data(addressing_mode) {
+            DataType::ValueU16(val) => val,
+            _ => panic!("should only have ValueU16"),
+        };
+
+        match register {
+            Register::BC => self.reg.set_bc(value),
+            Register::DE => self.reg.set_de(value),
+            Register::HL => self.reg.set_hl(value),
+            Register::SP => self.sp = value,
+            _ => panic!("invalid register / not implemented"),
+        }
+    }
+
+    fn store_a_dec_hl(&mut self, addressing_mode: &AddressingMode) {
+        let addr = match self.get_data(addressing_mode) {
+            DataType::Address(addr) => addr,
+            _ => panic!("Should not have value here"),
+        };
+
+        self.memory.write_u8(addr, self.reg.a)
+    }
+
+    fn xor_with_a(&mut self, addressing_mode: &AddressingMode) {
+        let res = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => val ^ self.reg.a,
+            DataType::Address(addr) => {
+                let val = self.memory.read_u8(addr);
+                val ^ self.reg.a
+            }
+            DataType::ValueU16(_) => panic!("Should not have u16 value"),
+        };
+
+        if res == 0 {
+            self.reg.set_z()
+        }
     }
 
     fn execute_next_opcode(&mut self) -> u32 {
-        let opcode = self.memory.read_u8(self.pc);
+        let code = self.memory.read_u8(self.pc);
+        println!("{:#04x}", self.memory.read_u8(self.pc + 1));
+        let (opcode_bytes, opcode_cycles, addressing_mode) = {
+            let opcode = self
+                .opcodes
+                .get(&code)
+                .unwrap_or_else(|| panic!("Opocde {:#04x} not recognized", code));
+            (
+                opcode.bytes as u16,
+                opcode.cycles as u32,
+                opcode.addressing_mode.clone(),
+            )
+        };
 
-        let cycles = match opcode {
-            0x31 => self.load_sp(),
-            0xaf => self.xor_with_a(TargetRegister::A),
+        match code {
+            0x21 => self.load_r16(&addressing_mode, Register::HL),
+            0x31 => self.load_r16(&addressing_mode, Register::SP),
+            0x32 => self.store_a_dec_hl(&addressing_mode),
+            0xaf => self.xor_with_a(&addressing_mode),
             _ => {
-                println!("Unknown opcode: {:#04x}", opcode);
+                println!("Unknown opcode: {:#04x}", code);
                 println!("PC: {:#06x}", self.pc);
                 println!("SP: {:#06x}", self.sp);
                 panic!()
-            },
+            }
         };
-
-        cycles
+        self.pc += opcode_bytes;
+        opcode_cycles as u32
     }
 
     fn update_timers(&self, cycles: u32) {
@@ -108,26 +178,21 @@ impl CPU {
         todo!()
     }
 
-    fn load_sp(&mut self) -> u32 {
-        self.sp = self.memory.read_u16(self.pc + 1);
-        self.pc += 3;
-        3
-    }
+    pub fn update(&mut self) {
+        let mut cycles_this_frame = 0;
 
-    fn xor_with_a(&mut self, target_register: TargetRegister) -> u32 {
-        self.pc += 1;
+        while cycles_this_frame < MAX_CYCLES as u32 {
+            let cycles = self.execute_next_opcode();
 
-        let (value, cycles) = match target_register {
-            TargetRegister::A => (self.reg.a, 1),
-            _ => todo!("Xor register not implemented")
-        };
+            cycles_this_frame += cycles;
 
-        let res = value ^ self.reg.a;
+            // self.update_timers(cycles);
 
-        if res == 0 {
-            self.reg.set_z()
+            // self.update_graphics(cycles);
+
+            // self.do_interupts();
         }
 
-        cycles
+        // self.render_screen();
     }
 }
