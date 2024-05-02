@@ -51,7 +51,7 @@ impl Opcode {
         }
     }
 
-    pub fn generate_map() -> HashMap<u8, Opcode> {
+    pub fn generate_normal_opcode_map() -> HashMap<u8, Opcode> {
         let opcodes: Vec<Opcode> = vec![
             Opcode::new(
                 0x31,
@@ -82,6 +82,22 @@ impl Opcode {
                 AddressingMode::AddressRegister(Register::HL),
             ),
         ];
+
+        let mut map = HashMap::new();
+        for op in opcodes {
+            map.insert(op.code, op);
+        }
+        map
+    }
+
+    pub fn generate_prefixed_opcode_map() -> HashMap<u8, Opcode> {
+        let opcodes: Vec<Opcode> = vec![Opcode::new(
+            0x7c,
+            "BIT 7, H".to_string(),
+            2,
+            2,
+            AddressingMode::ImmediateRegister(Register::A),
+        )];
 
         let mut map = HashMap::new();
         for op in opcodes {

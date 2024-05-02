@@ -49,7 +49,8 @@ pub struct CPU {
     reg: Registers,
     sp: u16,
     pc: u16,
-    opcodes: HashMap<u8, opcodes::Opcode>,
+    normal_opcodes: HashMap<u8, opcodes::Opcode>,
+    prefixed_opcodes: HashMap<u8, opcodes::Opcode>,
 }
 
 impl CPU {
@@ -59,7 +60,8 @@ impl CPU {
             reg: Registers::new(),
             sp: 0,
             pc: 0,
-            opcodes: Opcode::generate_map(),
+            normal_opcodes: Opcode::generate_normal_opcode_map(),
+            prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
         }
     }
 
@@ -131,14 +133,34 @@ impl CPU {
         }
     }
 
+    fn bit_check(&mut self, addressing_mode: &AddressingMode, bit: u8) {
+        let bit = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => val,
+            _ => panic!("bit check not yet implemented or dosent exist"),
+        };
+
+        if (bit & (1 << 7)) == 0 {}
+    }
+
     fn execute_next_opcode(&mut self) -> u32 {
-        let code = self.memory.read_u8(self.pc);
-        println!("{:#04x}", self.memory.read_u8(self.pc + 1));
+        let mut code = self.memory.read_u8(self.pc);
+        let prefixed = code == 0xcb;
+
         let (opcode_bytes, opcode_cycles, addressing_mode) = {
-            let opcode = self
-                .opcodes
-                .get(&code)
-                .unwrap_or_else(|| panic!("Opocde {:#04x} not recognized", code));
+            let opcode_set = if prefixed {
+                code = self.memory.read_u8(self.pc + 1);
+                &self.prefixed_opcodes
+            } else {
+                &self.normal_opcodes
+            };
+
+            let opcode = opcode_set.get(&code).unwrap_or_else(|| {
+                if prefixed {
+                    panic!("Prefixed Opocde {:#04x} not recognized", code)
+                } else {
+                    panic!("Normal Opocde {:#04x} not recognized", code)
+                }
+            });
             (
                 opcode.bytes as u16,
                 opcode.cycles as u32,
@@ -146,18 +168,26 @@ impl CPU {
             )
         };
 
-        match code {
-            0x21 => self.load_r16(&addressing_mode, Register::HL),
-            0x31 => self.load_r16(&addressing_mode, Register::SP),
-            0x32 => self.store_a_dec_hl(&addressing_mode),
-            0xaf => self.xor_with_a(&addressing_mode),
-            _ => {
-                println!("Unknown opcode: {:#04x}", code);
-                println!("PC: {:#06x}", self.pc);
-                println!("SP: {:#06x}", self.sp);
-                panic!()
+        if prefixed {
+            code = self.memory.read_u8(self.pc + 1);
+            match code {
+                0x7c => self.bit_check(&addressing_mode, 7),
+                _ => panic!("Prefixed code {:#04x} not implemented", code),
             }
-        };
+        } else {
+            match code {
+                0x21 => self.load_r16(&addressing_mode, Register::HL),
+                0x31 => self.load_r16(&addressing_mode, Register::SP),
+                0x32 => self.store_a_dec_hl(&addressing_mode),
+                0xaf => self.xor_with_a(&addressing_mode),
+                _ => {
+                    println!("Unknown opcode: {:#04x}", code);
+                    println!("PC: {:#06x}", self.pc);
+                    println!("SP: {:#06x}", self.sp);
+                    panic!()
+                }
+            };
+        }
         self.pc += opcode_bytes;
         opcode_cycles as u32
     }
