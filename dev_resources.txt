@@ -3,3 +3,4 @@ https://gbdev.io/
 https://gbdev.gg8.se/wiki/articles/Gameboy_Bootstrap_ROM
 https://rgbds.gbdev.io/docs/v0.7.0/gbz80.7#XOR_A,r8
 https://gbdev.io/gb-opcodes/optables/
+https://gekkio.fi/files/gb-docs/gbctr.pdf

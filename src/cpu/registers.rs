@@ -51,35 +51,37 @@ impl Registers {
         self.l = (value & 0xFF) as u8;
     }
 
-    pub fn set_z(&mut self) {
+    pub fn set_z_flag(&mut self) {
         self.f |= 0b0000_0001;
     }
 
-    pub fn clear_z(&mut self) {
+    pub fn clear_z_flag(&mut self) {
         self.f &= 0b1111_1110;
     }
 
-    pub fn set_n(&mut self) {
+    pub fn check_z_flag(&self) {}
+
+    pub fn set_n_flag(&mut self) {
         self.f |= 0b0000_0010;
     }
 
-    pub fn clear_n(&mut self) {
+    pub fn clear_n_flag(&mut self) {
         self.f &= 0b1111_1101;
     }
 
-    pub fn set_h(&mut self) {
+    pub fn set_h_flag(&mut self) {
         self.f |= 0b0000_0100;
     }
 
-    pub fn clear_h(&mut self) {
+    pub fn clear_h_flag(&mut self) {
         self.f &= 0b1111_1011;
     }
 
-    pub fn set_c(&mut self) {
+    pub fn set_c_flag(&mut self) {
         self.f |= 0b0000_1000;
     }
 
-    pub fn clear_c(&mut self) {
+    pub fn clear_c_flag(&mut self) {
         self.f &= 0b1111_0111;
     }
 }

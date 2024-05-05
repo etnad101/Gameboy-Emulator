@@ -129,7 +129,7 @@ impl CPU {
         };
 
         if res == 0 {
-            self.reg.set_z()
+            self.reg.set_z_flag()
         }
     }
 
@@ -139,7 +139,19 @@ impl CPU {
             _ => panic!("bit check not yet implemented or dosent exist"),
         };
 
-        if (bit & (1 << 7)) == 0 {}
+        if (bit & (1 << 7)) == 0 {
+            self.reg.set_z_flag();
+        }
+        self.reg.set_h_flag();
+    }
+
+    fn reljump_zero_not_set(&mut self, addressing_mode: &AddressingMode) {
+        let data = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => val,
+            _ => panic!("Should only be u8"),
+        };
+
+        let offset = data as i8;
     }
 
     fn execute_next_opcode(&mut self) -> u32 {

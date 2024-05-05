@@ -68,6 +68,13 @@ impl Opcode {
                 AddressingMode::ImmediateRegister(Register::A),
             ),
             Opcode::new(
+                0x20,
+                "JR NZ, e8".to_string(),
+                2,
+                2, // + 1 if taken,
+                AddressingMode::ImmediateU8,
+            ),
+            Opcode::new(
                 0x21,
                 "LD r16,n16".to_string(),
                 3,
