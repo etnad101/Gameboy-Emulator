@@ -71,6 +71,10 @@ impl Display {
         Ok(())
     }
 
+    pub fn limit_update_rate(&mut self, rate: Option<std::time::Duration>) {
+       self.window.limit_update_rate(rate); 
+    }
+
     pub fn is_open(&self) -> bool {
         self.window.is_open() && !self.window.is_key_down(Key::Escape)
     }

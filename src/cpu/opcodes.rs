@@ -103,7 +103,7 @@ impl Opcode {
             "BIT 7, H".to_string(),
             2,
             2,
-            AddressingMode::ImmediateRegister(Register::A),
+            AddressingMode::ImmediateRegister(Register::H),
         )];
 
         let mut map = HashMap::new();

@@ -43,7 +43,7 @@ impl Registers {
     }
 
     pub fn hl(&self) -> u16 {
-        (self.h as u16) << 8 | (self.h as u16)
+        (self.h as u16) << 8 | (self.l as u16)
     }
 
     pub fn set_hl(&mut self, value: u16) {
@@ -52,36 +52,50 @@ impl Registers {
     }
 
     pub fn set_z_flag(&mut self) {
-        self.f |= 0b0000_0001;
+        self.f |= 0b1000_0000;
     }
 
     pub fn clear_z_flag(&mut self) {
-        self.f &= 0b1111_1110;
+        self.f &= 0b0111_1111;
     }
 
-    pub fn check_z_flag(&self) {}
+    pub fn check_z_flag(&self) -> bool {
+        self.f & 0b1000_0000 > 0
+    }
 
     pub fn set_n_flag(&mut self) {
-        self.f |= 0b0000_0010;
+        self.f |= 0b0100_0000;
     }
 
     pub fn clear_n_flag(&mut self) {
-        self.f &= 0b1111_1101;
+        self.f &= 0b1011_1111;
+    }
+
+    pub fn check_n_flag(&self) -> bool {
+        self.f & 0b0100_0000 > 0
     }
 
     pub fn set_h_flag(&mut self) {
-        self.f |= 0b0000_0100;
+        self.f |= 0b0010_0000;
     }
 
     pub fn clear_h_flag(&mut self) {
-        self.f &= 0b1111_1011;
+        self.f &= 0b1101_1111;
+    }
+    
+    pub fn check_h_flag(&self) -> bool {
+        self.f & 0b0010_0000 > 0
     }
 
     pub fn set_c_flag(&mut self) {
-        self.f |= 0b0000_1000;
+        self.f |= 0b0001_0000;
     }
 
     pub fn clear_c_flag(&mut self) {
-        self.f &= 0b1111_0111;
+        self.f &= 0b1110_1111;
+    }
+    
+    pub fn check_c_flag(&self) -> bool {
+        self.f & 0b0001_0000 > 0
     }
 }

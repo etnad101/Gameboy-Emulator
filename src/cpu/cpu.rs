@@ -1,12 +1,14 @@
 use crate::cpu::opcodes::Register;
 use crate::cpu::registers::Registers;
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Read, io};
 
 use super::opcodes::{self, AddressingMode, Opcode};
 
 const MEM_SIZE: usize = 0xFFFF;
 
 const MAX_CYCLES: usize = 69905;
+
+const DEBUG: bool = false;
 
 enum DataType {
     Address(u16),
@@ -65,6 +67,15 @@ impl CPU {
         }
     }
 
+    fn print_debug_info(&mut self) {
+        println!("\nDEBUG INFO\n------------------------------");
+        println!("Program Coutner: {:#04x}, Stack Pointer: {:#04x}", self.pc, self.sp);
+        println!("A: {:#04x}, F: {:#010b}", self.reg.a, self.reg.f);
+        println!("B: {:#04x}, C: {:#04x}", self.reg.b, self.reg.c);
+        println!("D: {:#04x}, E: {:#04x}", self.reg.d, self.reg.e);
+        println!("H: {:#04x}, L: {:#04x}", self.reg.h, self.reg.l);
+    }
+
     fn get_data(&self, addressing_mode: &AddressingMode) -> DataType {
         match addressing_mode {
             AddressingMode::ImmediateRegister(register) => match register {
@@ -115,7 +126,8 @@ impl CPU {
             _ => panic!("Should not have value here"),
         };
 
-        self.memory.write_u8(addr, self.reg.a)
+        self.memory.write_u8(addr, self.reg.a);
+        self.reg.set_hl(self.reg.hl() - 1);
     }
 
     fn xor_with_a(&mut self, addressing_mode: &AddressingMode) {
@@ -134,13 +146,15 @@ impl CPU {
     }
 
     fn bit_check(&mut self, addressing_mode: &AddressingMode, bit: u8) {
-        let bit = match self.get_data(addressing_mode) {
+        let byte = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             _ => panic!("bit check not yet implemented or dosent exist"),
         };
 
-        if (bit & (1 << 7)) == 0 {
+        if (byte & (1 << bit)) == 0 {
             self.reg.set_z_flag();
+        } else {
+            self.reg.clear_z_flag();
         }
         self.reg.set_h_flag();
     }
@@ -151,7 +165,12 @@ impl CPU {
             _ => panic!("Should only be u8"),
         };
 
-        let offset = data as i8;
+        if !self.reg.check_z_flag() {
+            let offset = data as i8;
+            let temp_pc = self.pc as i16;
+            let res = temp_pc + offset as i16;
+            self.pc = res as u16
+        }
     }
 
     fn execute_next_opcode(&mut self) -> u32 {
@@ -188,6 +207,7 @@ impl CPU {
             }
         } else {
             match code {
+                0x20 => self.reljump_zero_not_set(&addressing_mode),
                 0x21 => self.load_r16(&addressing_mode, Register::HL),
                 0x31 => self.load_r16(&addressing_mode, Register::SP),
                 0x32 => self.store_a_dec_hl(&addressing_mode),
@@ -200,6 +220,11 @@ impl CPU {
                 }
             };
         }
+
+        if DEBUG {
+            self.print_debug_info(); 
+        }
+
         self.pc += opcode_bytes;
         opcode_cycles as u32
     }
