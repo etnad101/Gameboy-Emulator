@@ -24,6 +24,7 @@ pub enum AddressingMode {
     ImmediateI8,
     ImmediateU16,
     AdressU16,
+    IoAdressOffset,
 }
 
 pub struct Opcode {
@@ -54,25 +55,25 @@ impl Opcode {
     pub fn generate_normal_opcode_map() -> HashMap<u8, Opcode> {
         let opcodes: Vec<Opcode> = vec![
             Opcode::new(
+                0x0e,
+                "LD C, n8".to_string(),
+                2,
+                2,
+                AddressingMode::ImmediateU8,
+            ),
+            Opcode::new(
+                0x3e,
+                "LD A".to_string(),
+                2,
+                2,
+                AddressingMode::ImmediateU8,
+            ),
+            Opcode::new(
                 0x31,
                 "LD SP,n16".to_string(),
                 3,
                 3,
                 AddressingMode::ImmediateU16,
-            ),
-            Opcode::new(
-                0xaf,
-                "XOR A,r8".to_string(),
-                1,
-                1,
-                AddressingMode::ImmediateRegister(Register::A),
-            ),
-            Opcode::new(
-                0x20,
-                "JR NZ, e8".to_string(),
-                2,
-                2, // + 1 if taken,
-                AddressingMode::ImmediateU8,
             ),
             Opcode::new(
                 0x21,
@@ -87,6 +88,27 @@ impl Opcode {
                 1,
                 2,
                 AddressingMode::AddressRegister(Register::HL),
+            ),
+            Opcode::new(
+                0xe2,
+                "LD [C], A".to_string(),
+                1,
+                2,
+                AddressingMode::IoAdressOffset,
+            ),
+            Opcode::new(
+                0xaf,
+                "XOR A,r8".to_string(),
+                1,
+                1,
+                AddressingMode::ImmediateRegister(Register::A),
+            ),
+            Opcode::new(
+                0x20,
+                "JR NZ, e8".to_string(),
+                2,
+                2, // + 1 if taken,
+                AddressingMode::ImmediateU8,
             ),
         ];
 

@@ -1,6 +1,11 @@
+use chrono::{DateTime, Local};
+
 use crate::cpu::opcodes::Register;
 use crate::cpu::registers::Registers;
-use std::{collections::HashMap, io::Read, io};
+use std::{
+    collections::HashMap,
+    fs,
+};
 
 use super::opcodes::{self, AddressingMode, Opcode};
 
@@ -8,7 +13,13 @@ const MEM_SIZE: usize = 0xFFFF;
 
 const MAX_CYCLES: usize = 69905;
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
+
+enum AlterHL {
+    Inc,
+    Dec,
+    None,
+}
 
 enum DataType {
     Address(u16),
@@ -53,6 +64,7 @@ pub struct CPU {
     pc: u16,
     normal_opcodes: HashMap<u8, opcodes::Opcode>,
     prefixed_opcodes: HashMap<u8, opcodes::Opcode>,
+    debug_log: String,
 }
 
 impl CPU {
@@ -64,16 +76,72 @@ impl CPU {
             pc: 0,
             normal_opcodes: Opcode::generate_normal_opcode_map(),
             prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
+            debug_log: String::new(),
         }
     }
 
-    fn print_debug_info(&mut self) {
-        println!("\nDEBUG INFO\n------------------------------");
-        println!("Program Coutner: {:#04x}, Stack Pointer: {:#04x}", self.pc, self.sp);
-        println!("A: {:#04x}, F: {:#010b}", self.reg.a, self.reg.f);
-        println!("B: {:#04x}, C: {:#04x}", self.reg.b, self.reg.c);
-        println!("D: {:#04x}, E: {:#04x}", self.reg.d, self.reg.e);
-        println!("H: {:#04x}, L: {:#04x}", self.reg.h, self.reg.l);
+    fn dump_mem(&mut self) {
+        self.debug_log
+            .push_str("\nMEMORY DUMP\n------------------------------------");
+        self.debug_log.push_str("\nBOOT ROM");
+        for i in 0..=MEM_SIZE {
+            if i == 0x8000 {
+                self.debug_log.push_str("\nVRAM");
+            }
+            if i == 0xFE00 {
+                self.debug_log.push_str("\nObject attribute memory (OAM)")
+            }
+            if i == 0xFF00 {
+                self.debug_log.push_str("\nI/O Registers");
+            }
+
+            if i % 32 == 0 {
+                self.debug_log.push_str(&format!("\n|{:#06x}| ", i));
+            } else if i % 8 == 0 {
+                self.debug_log.push_str(" ");
+            }
+
+            let byte = self.memory.read_u8(i as u16);
+            self.debug_log.push_str(&format!("{:02x} ", byte));
+            
+        }
+    }
+
+    fn log_debug_info(&mut self) {
+        self.debug_log
+            .push_str(&format!("\nStack Pointer: {:#04x}", self.sp));
+        self.debug_log.push_str(&format!(
+            "\nA: {:#04x}, F: {:#010b}",
+            self.reg.a, self.reg.f
+        ));
+        self.debug_log
+            .push_str(&format!("\nB: {:#04x}, C: {:#04x}", self.reg.b, self.reg.c));
+        self.debug_log
+            .push_str(&format!("\nD: {:#04x}, E: {:#04x}", self.reg.d, self.reg.e));
+        self.debug_log
+            .push_str(&format!("\nH: {:#04x}, L: {:#04x}", self.reg.h, self.reg.l));
+        self.debug_log.push_str("\n");
+        self.debug_log
+            .push_str(&format!("\nProgram Coutner: {:#04x}", self.pc));
+    }
+
+    fn crash(&mut self, msg: String) -> ! {
+        if DEBUG {
+            self.dump_mem();
+            let dt = Local::now();
+
+            let native_utc = dt.naive_utc();
+            let offset = dt.offset().clone();
+
+            let now = DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
+            let log_name = "crash_log".to_string()
+                + &now.replace(" ", "_").replace(":", "-").replace(".", "_");
+            let path = "./logs/".to_string() + &log_name;
+
+            fs::File::create(path.clone()).expect("unable to create file");
+            fs::write(path, self.debug_log.clone()).expect("unable to write to file");
+        }
+        panic!("{}", String::from(msg));
     }
 
     fn get_data(&self, addressing_mode: &AddressingMode) -> DataType {
@@ -102,32 +170,44 @@ impl CPU {
             AddressingMode::ImmediateI8 => todo!("Immediate_i8 not implemented"),
             AddressingMode::ImmediateU16 => DataType::ValueU16(self.memory.read_u16(self.pc + 1)),
             AddressingMode::AdressU16 => DataType::Address(self.memory.read_u16(self.pc + 1)),
+            AddressingMode::IoAdressOffset => DataType::Address(0xFF00 + self.reg.c as u16),
         }
     }
 
-    fn load_r16(&mut self, addressing_mode: &AddressingMode, register: Register) {
-        let value = match self.get_data(addressing_mode) {
-            DataType::ValueU16(val) => val,
-            _ => panic!("should only have ValueU16"),
-        };
-
-        match register {
-            Register::BC => self.reg.set_bc(value),
-            Register::DE => self.reg.set_de(value),
-            Register::HL => self.reg.set_hl(value),
-            Register::SP => self.sp = value,
-            _ => panic!("invalid register / not implemented"),
+    fn load_register(&mut self, addressing_mode: &AddressingMode, register: Register) {
+        match self.get_data(addressing_mode) {
+            DataType::ValueU16(value) => match register {
+                Register::BC => self.reg.set_bc(value),
+                Register::DE => self.reg.set_de(value),
+                Register::HL => self.reg.set_hl(value),
+                Register::SP => self.sp = value,
+                _ => self.crash(format!("Must be 16 bit register for this function")),
+            },
+            DataType::ValueU8(value) => match register {
+                Register::A => self.reg.a = value,
+                Register::B => self.reg.b = value,
+                Register::C => self.reg.c = value,
+                Register::D => self.reg.d = value,
+                Register::E => self.reg.e = value,
+                Register::H => self.reg.h = value,
+                Register::L => self.reg.l = value,
+                _ => self.crash(format!("Must be 8 bit register for this function")),
+            },
+            _ => self.crash(format!("Load type not implemented")),
         }
     }
 
-    fn store_a_dec_hl(&mut self, addressing_mode: &AddressingMode) {
-        let addr = match self.get_data(addressing_mode) {
-            DataType::Address(addr) => addr,
-            _ => panic!("Should not have value here"),
-        };
+    fn store_val_from_a(&mut self, addressing_mode: &AddressingMode, alter_hl: AlterHL) {
+        match self.get_data(addressing_mode) {
+            DataType::Address(addr) => self.memory.write_u8(addr, self.reg.a),
+            _ => self.crash("Must be address".to_string()),
+        }
 
-        self.memory.write_u8(addr, self.reg.a);
-        self.reg.set_hl(self.reg.hl() - 1);
+        match alter_hl {
+            AlterHL::Dec => self.reg.set_hl(self.reg.hl() - 1),
+            AlterHL::Inc => self.reg.set_hl(self.reg.hl() + 1),
+            AlterHL::None => {}
+        }
     }
 
     fn xor_with_a(&mut self, addressing_mode: &AddressingMode) {
@@ -137,7 +217,7 @@ impl CPU {
                 let val = self.memory.read_u8(addr);
                 val ^ self.reg.a
             }
-            DataType::ValueU16(_) => panic!("Should not have u16 value"),
+            DataType::ValueU16(_) => self.crash(format!("Should not have u16 value")),
         };
 
         if res == 0 {
@@ -148,7 +228,7 @@ impl CPU {
     fn bit_check(&mut self, addressing_mode: &AddressingMode, bit: u8) {
         let byte = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
-            _ => panic!("bit check not yet implemented or dosent exist"),
+            _ => self.crash(format!("bit check not yet implemented or dosent exist")),
         };
 
         if (byte & (1 << bit)) == 0 {
@@ -162,7 +242,7 @@ impl CPU {
     fn reljump_zero_not_set(&mut self, addressing_mode: &AddressingMode) {
         let data = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
-            _ => panic!("Should only be u8"),
+            _ => self.crash(format!("Should only be u8")),
         };
 
         if !self.reg.check_z_flag() {
@@ -185,13 +265,16 @@ impl CPU {
                 &self.normal_opcodes
             };
 
-            let opcode = opcode_set.get(&code).unwrap_or_else(|| {
-                if prefixed {
-                    panic!("Prefixed Opocde {:#04x} not recognized", code)
-                } else {
-                    panic!("Normal Opocde {:#04x} not recognized", code)
+            let opcode = match opcode_set.get(&code) {
+                Some(op) => op,
+                None => {
+                    if prefixed {
+                        self.crash(format!("Prefixed Opocde {:#04x} not recognized", code))
+                    } else {
+                        self.crash(format!("Normal Opocde {:#04x} not recognized", code))
+                    }
                 }
-            });
+            };
             (
                 opcode.bytes as u16,
                 opcode.cycles as u32,
@@ -203,29 +286,33 @@ impl CPU {
             code = self.memory.read_u8(self.pc + 1);
             match code {
                 0x7c => self.bit_check(&addressing_mode, 7),
-                _ => panic!("Prefixed code {:#04x} not implemented", code),
+                _ => self.crash(format!("Prefixed code {:#04x} not implemented", code)),
             }
         } else {
             match code {
+                0x0e => self.load_register(&addressing_mode, Register::C),
+                0x3e => self.load_register(&addressing_mode, Register::A),
+                0x21 => self.load_register(&addressing_mode, Register::HL),
+                0x31 => self.load_register(&addressing_mode, Register::SP),
+                0xe2 => self.store_val_from_a(&addressing_mode, AlterHL::None),
                 0x20 => self.reljump_zero_not_set(&addressing_mode),
-                0x21 => self.load_r16(&addressing_mode, Register::HL),
-                0x31 => self.load_r16(&addressing_mode, Register::SP),
-                0x32 => self.store_a_dec_hl(&addressing_mode),
+                0x32 => self.store_val_from_a(&addressing_mode, AlterHL::Dec),
                 0xaf => self.xor_with_a(&addressing_mode),
                 _ => {
                     println!("Unknown opcode: {:#04x}", code);
                     println!("PC: {:#06x}", self.pc);
                     println!("SP: {:#06x}", self.sp);
-                    panic!()
+                    self.crash(String::new())
                 }
             };
         }
 
+        self.pc += opcode_bytes;
+
         if DEBUG {
-            self.print_debug_info(); 
+            self.log_debug_info();
         }
 
-        self.pc += opcode_bytes;
         opcode_cycles as u32
     }
 
