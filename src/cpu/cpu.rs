@@ -2,10 +2,7 @@ use chrono::{DateTime, Local};
 
 use crate::cpu::opcodes::Register;
 use crate::cpu::registers::Registers;
-use std::{
-    collections::HashMap,
-    fs,
-};
+use std::{collections::HashMap, fs};
 
 use super::opcodes::{self, AddressingMode, Opcode};
 
@@ -80,19 +77,43 @@ impl CPU {
         }
     }
 
+    // Debugging methods
+
     fn dump_mem(&mut self) {
         self.debug_log
             .push_str("\nMEMORY DUMP\n------------------------------------");
-        self.debug_log.push_str("\nBOOT ROM");
-        for i in 0..=MEM_SIZE {
+        self.debug_log
+            .push_str("\n16KiB ROM Bank 00 | BOOT ROM $0000 - $0100");
+        for i in 0..MEM_SIZE {
+            if i == 0x4000 {
+                self.debug_log.push_str("\n16 KiB ROM Bank 01-NN");
+            }
             if i == 0x8000 {
                 self.debug_log.push_str("\nVRAM");
+            }
+            if i == 0xA000 {
+                self.debug_log.push_str("\n8 KiB external RAM")
+            }
+            if i == 0xC000 {
+                self.debug_log.push_str("\n4 KiB WRAM")
+            }
+            if i == 0xD000 {
+                self.debug_log.push_str("\n4 KiB WRAM")
+            }
+            if i == 0xE000 {
+                self.debug_log.push_str("\nEcho RAM")
             }
             if i == 0xFE00 {
                 self.debug_log.push_str("\nObject attribute memory (OAM)")
             }
+            if i == 0xFEA0 {
+                self.debug_log.push_str("\n NOT USEABLE")
+            }
             if i == 0xFF00 {
                 self.debug_log.push_str("\nI/O Registers");
+            }
+            if i == 0xFF80 {
+                self.debug_log.push_str("\nHigh RAM / HRAM")
             }
 
             if i % 32 == 0 {
@@ -103,7 +124,6 @@ impl CPU {
 
             let byte = self.memory.read_u8(i as u16);
             self.debug_log.push_str(&format!("{:02x} ", byte));
-            
         }
     }
 
@@ -144,6 +164,8 @@ impl CPU {
         panic!("{}", String::from(msg));
     }
 
+    // Utility methods
+
     fn get_data(&self, addressing_mode: &AddressingMode) -> DataType {
         match addressing_mode {
             AddressingMode::ImmediateRegister(register) => match register {
@@ -173,6 +195,8 @@ impl CPU {
             AddressingMode::IoAdressOffset => DataType::Address(0xFF00 + self.reg.c as u16),
         }
     }
+
+    // Opcode methods
 
     fn load_register(&mut self, addressing_mode: &AddressingMode, register: Register) {
         match self.get_data(addressing_mode) {
@@ -207,6 +231,32 @@ impl CPU {
             AlterHL::Dec => self.reg.set_hl(self.reg.hl() - 1),
             AlterHL::Inc => self.reg.set_hl(self.reg.hl() + 1),
             AlterHL::None => {}
+        }
+    }
+
+    fn bit_track_add_u8(lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
+        let sum = lhs.wrapping_add(rhs);
+        let bit_check = lhs & rhs;
+        let mut tracked_bits = [false; 8];
+        for i in 0..8 {
+            let bit = bit_check & (1 << i);
+            if bit > 0 {
+                tracked_bits[i] = true;
+            }
+        }
+        (sum, [false; 8])
+    }
+
+    fn increment_r8(&mut self, register: Register) {
+        match register {
+            Register::A => self.reg.b += 1,
+            Register::B => self.reg.b += 1,
+            Register::C => self.reg.c += 1,
+            Register::D => self.reg.d += 1,
+            Register::E => self.reg.e += 1,
+            Register::H => self.reg.h += 1,
+            Register::L => self.reg.l += 1,
+            _ => self.crash("expected 8 bit register".to_string()),
         }
     }
 
@@ -252,6 +302,8 @@ impl CPU {
             self.pc = res as u16
         }
     }
+
+    // Execution methods
 
     fn execute_next_opcode(&mut self) -> u32 {
         let mut code = self.memory.read_u8(self.pc);
@@ -349,4 +401,12 @@ impl CPU {
 
         // self.render_screen();
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bit_track_add_u8() {}
 }

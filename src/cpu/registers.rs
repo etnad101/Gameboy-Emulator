@@ -52,50 +52,50 @@ impl Registers {
     }
 
     pub fn set_z_flag(&mut self) {
-        self.f |= 0b1000_0000;
+        self.f |= 1 << 7;
     }
 
     pub fn clear_z_flag(&mut self) {
-        self.f &= 0b0111_1111;
+        self.f &= !(1 << 7);
     }
 
     pub fn check_z_flag(&self) -> bool {
-        self.f & 0b1000_0000 > 0
+        (self.f & (1 << 7)) > 0
     }
 
     pub fn set_n_flag(&mut self) {
-        self.f |= 0b0100_0000;
+        self.f |= 1 << 6;
     }
 
     pub fn clear_n_flag(&mut self) {
-        self.f &= 0b1011_1111;
+        self.f &= !(1 << 6);
     }
 
     pub fn check_n_flag(&self) -> bool {
-        self.f & 0b0100_0000 > 0
+        (self.f & (1 << 6)) > 0
     }
 
     pub fn set_h_flag(&mut self) {
-        self.f |= 0b0010_0000;
+        self.f |= 1 << 5;
     }
 
     pub fn clear_h_flag(&mut self) {
-        self.f &= 0b1101_1111;
+        self.f &= !(1 << 5);
     }
-    
+
     pub fn check_h_flag(&self) -> bool {
-        self.f & 0b0010_0000 > 0
+        (self.f & (1 << 5)) > 0
     }
 
     pub fn set_c_flag(&mut self) {
-        self.f |= 0b0001_0000;
+        self.f |= 1 << 4;
     }
 
     pub fn clear_c_flag(&mut self) {
-        self.f &= 0b1110_1111;
+        self.f &= !(1 << 4);
     }
-    
+
     pub fn check_c_flag(&self) -> bool {
-        self.f & 0b0001_0000 > 0
+        (self.f & (1 << 4)) > 0
     }
 }
