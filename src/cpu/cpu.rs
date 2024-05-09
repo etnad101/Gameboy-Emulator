@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 
 use crate::cpu::opcodes::Register;
 use crate::cpu::registers::Registers;
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, ops::Add};
 
 use super::opcodes::{self, AddressingMode, Opcode};
 
@@ -12,9 +12,9 @@ const MAX_CYCLES: usize = 69905;
 
 const DEBUG: bool = true;
 
-enum AlterHL {
-    Inc,
-    Dec,
+enum StoreLoadModifier {
+    IncHL,
+    DecHL,
     None,
 }
 
@@ -22,10 +22,12 @@ enum DataType {
     Address(u16),
     ValueU8(u8),
     ValueU16(u16),
+    ValueI8(i8),
+    None,
 }
 
 struct MemoryBus {
-    memory: [u8; MEM_SIZE],
+    memory: [u8; MEM_SIZE + 1],
 }
 
 impl MemoryBus {
@@ -33,7 +35,7 @@ impl MemoryBus {
         let path = "./DMG_ROM.bin";
         let boot_rom = std::fs::read(path).unwrap();
 
-        let mut memory = [0; MEM_SIZE];
+        let mut memory = [0; MEM_SIZE + 1];
         memory[0..boot_rom.len()].copy_from_slice(&boot_rom);
         MemoryBus { memory }
     }
@@ -84,7 +86,7 @@ impl CPU {
             .push_str("\nMEMORY DUMP\n------------------------------------");
         self.debug_log
             .push_str("\n16KiB ROM Bank 00 | BOOT ROM $0000 - $0100");
-        for i in 0..MEM_SIZE {
+        for i in 0..=MEM_SIZE {
             if i == 0x4000 {
                 self.debug_log.push_str("\n16 KiB ROM Bank 01-NN");
             }
@@ -161,7 +163,7 @@ impl CPU {
             fs::File::create(path.clone()).expect("unable to create file");
             fs::write(path, self.debug_log.clone()).expect("unable to write to file");
         }
-        panic!("{}", String::from(msg));
+        panic!("CRASHING: {}", String::from(msg));
     }
 
     // Utility methods
@@ -189,52 +191,106 @@ impl CPU {
             AddressingMode::JoypadU8 => {
                 todo!("a8 adressing mode not implemented")
             }
-            AddressingMode::ImmediateI8 => todo!("Immediate_i8 not implemented"),
+            AddressingMode::ImmediateI8 => DataType::ValueI8(self.memory.read_u8(self.pc + 1) as i8),
             AddressingMode::ImmediateU16 => DataType::ValueU16(self.memory.read_u16(self.pc + 1)),
             AddressingMode::AdressU16 => DataType::Address(self.memory.read_u16(self.pc + 1)),
             AddressingMode::IoAdressOffset => DataType::Address(0xFF00 + self.reg.c as u16),
+            AddressingMode::None => DataType::None,
         }
     }
 
     // Opcode methods
 
-    fn load_register(&mut self, addressing_mode: &AddressingMode, register: Register) {
-        match self.get_data(addressing_mode) {
-            DataType::ValueU16(value) => match register {
-                Register::BC => self.reg.set_bc(value),
-                Register::DE => self.reg.set_de(value),
-                Register::HL => self.reg.set_hl(value),
-                Register::SP => self.sp = value,
-                _ => self.crash(format!("Must be 16 bit register for this function")),
+    fn load_or_store_value(
+        &mut self,
+        lhs: &AddressingMode,
+        rhs: &AddressingMode,
+        modifier: StoreLoadModifier,
+    ) {
+        let data = self.get_data(rhs);
+
+        match lhs {
+            AddressingMode::ImmediateRegister(reg) => match data {
+                DataType::ValueU8(value) => match reg {
+                    Register::A => self.reg.a = value,
+                    Register::B => self.reg.b = value,
+                    Register::C => self.reg.c = value,
+                    Register::D => self.reg.d = value,
+                    Register::E => self.reg.e = value,
+                    Register::H => self.reg.h = value,
+                    Register::L => self.reg.l = value,
+                    _ => self.crash("Must store u8 value in u8 register".to_string()),
+                },
+                DataType::ValueU16(value) => match reg {
+                    Register::BC => self.reg.set_bc(value),
+                    Register::DE => self.reg.set_de(value),
+                    Register::HL => self.reg.set_hl(value),
+                    Register::SP => self.sp = value,
+                    _ => self.crash("Must store u16 value in u16 register".to_string()),
+                },
+                DataType::Address(addr) => {
+                    let value = self.memory.read_u8(addr);
+                    match reg {
+                        Register::A => self.reg.a = value,
+                        Register::B => self.reg.b = value,
+                        Register::C => self.reg.c = value,
+                        Register::D => self.reg.d = value,
+                        Register::E => self.reg.e = value,
+                        Register::H => self.reg.h = value,
+                        Register::L => self.reg.l = value,
+                        _ => self.crash("Must store u8 value in u8 register".to_string()),
+                    }
+                }
+                _ => self.crash("Should not have None here".to_string()),
             },
-            DataType::ValueU8(value) => match register {
-                Register::A => self.reg.a = value,
-                Register::B => self.reg.b = value,
-                Register::C => self.reg.c = value,
-                Register::D => self.reg.d = value,
-                Register::E => self.reg.e = value,
-                Register::H => self.reg.h = value,
-                Register::L => self.reg.l = value,
-                _ => self.crash(format!("Must be 8 bit register for this function")),
-            },
-            _ => self.crash(format!("Load type not implemented")),
+            AddressingMode::AddressRegister(reg) => {
+                let addr = match reg {
+                    Register::BC => self.reg.bc(),
+                    Register::DE => self.reg.de(),
+                    Register::HL => self.reg.hl(),
+                    _ => self.crash("Address can't come from 8 bit registere".to_string()),
+                };
+
+                match data {
+                    DataType::ValueU8(value) => self.memory.write_u8(addr, value),
+                    _ => self.crash(
+                        "Should only write u8 to mem / not implemented - check docs".to_string(),
+                    ),
+                }
+            }
+            AddressingMode::AdressU16 => {
+                let addr = match self.get_data(lhs) {
+                    DataType::Address(addr) => addr,
+                    _ => self.crash("Should only have address here".to_string()),
+                };
+
+                match data {
+                    DataType::ValueU8(value) => self.memory.write_u8(addr, value),
+                    _ => self.crash("Should only have u8 value here".to_string()),
+                }
+            }
+            AddressingMode::IoAdressOffset => {
+                let addr = match self.get_data(lhs) {
+                    DataType::Address(addr) => addr,
+                    _ => self.crash("Should only have IO offset address here".to_string()),
+                };
+
+                match data {
+                    DataType::ValueU8(value) => self.memory.write_u8(addr, value),
+                    _ => self.crash("Should only be writing u8 value to memory".to_string()),
+                }
+            }
+            _ => self.crash("Should only be an address or value".to_string()),
+        }
+
+        match modifier {
+            StoreLoadModifier::DecHL => self.reg.set_hl(self.reg.hl() - 1),
+            StoreLoadModifier::IncHL => self.reg.set_hl(self.reg.hl() + 1),
+            StoreLoadModifier::None => (),
         }
     }
 
-    fn store_val_from_a(&mut self, addressing_mode: &AddressingMode, alter_hl: AlterHL) {
-        match self.get_data(addressing_mode) {
-            DataType::Address(addr) => self.memory.write_u8(addr, self.reg.a),
-            _ => self.crash("Must be address".to_string()),
-        }
-
-        match alter_hl {
-            AlterHL::Dec => self.reg.set_hl(self.reg.hl() - 1),
-            AlterHL::Inc => self.reg.set_hl(self.reg.hl() + 1),
-            AlterHL::None => {}
-        }
-    }
-
-    fn bit_track_add_u8(lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
+    fn bit_track_add_u8(&self, lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
         let sum = lhs.wrapping_add(rhs);
         let bit_check = lhs & rhs;
         let mut tracked_bits = [false; 8];
@@ -248,26 +304,66 @@ impl CPU {
     }
 
     fn increment_r8(&mut self, register: Register) {
-        match register {
-            Register::A => self.reg.b += 1,
-            Register::B => self.reg.b += 1,
-            Register::C => self.reg.c += 1,
-            Register::D => self.reg.d += 1,
-            Register::E => self.reg.e += 1,
-            Register::H => self.reg.h += 1,
-            Register::L => self.reg.l += 1,
+        let (sum, overflow) = match register {
+            Register::A => {
+                let (sum, overflow) = self.bit_track_add_u8(self.reg.a, 1);
+                self.reg.a = sum;
+                (sum, overflow)
+            }
+            Register::B => {
+                let (sum, overflow) = self.bit_track_add_u8(self.reg.b, 1);
+                self.reg.b = sum;
+                (sum, overflow)
+            }
+            Register::C => {
+                let (sum, overflow) = self.bit_track_add_u8(self.reg.c, 1);
+                self.reg.c = sum;
+                (sum, overflow)
+            }
+            Register::D => {
+                let (sum, overflow) = self.bit_track_add_u8(self.reg.d, 1);
+                self.reg.d = sum;
+                (sum, overflow)
+            }
+            Register::E => {
+                let (sum, overflow) = self.bit_track_add_u8(self.reg.e, 1);
+                self.reg.e = sum;
+                (sum, overflow)
+            }
+            Register::H => {
+                let (sum, overflow) = self.bit_track_add_u8(self.reg.h, 1);
+                self.reg.h = sum;
+                (sum, overflow)
+            }
+            Register::L => {
+                let (sum, overflow) = self.bit_track_add_u8(self.reg.l, 1);
+                self.reg.l = sum;
+                (sum, overflow)
+            }
             _ => self.crash("expected 8 bit register".to_string()),
+        };
+
+        if sum == 0 {
+            self.reg.set_z_flag()
+        } else {
+            self.reg.clear_z_flag()
+        }
+
+        if overflow[3] {
+            self.reg.set_h_flag()
+        } else {
+            self.reg.clear_h_flag()
         }
     }
 
-    fn xor_with_a(&mut self, addressing_mode: &AddressingMode) {
-        let res = match self.get_data(addressing_mode) {
+    fn xor_with_a(&mut self, rhs: &AddressingMode) {
+        let res = match self.get_data(rhs) {
             DataType::ValueU8(val) => val ^ self.reg.a,
             DataType::Address(addr) => {
                 let val = self.memory.read_u8(addr);
                 val ^ self.reg.a
             }
-            DataType::ValueU16(_) => self.crash(format!("Should not have u16 value")),
+            _ => self.crash(format!("Should only xor with 8 bit register or HL address")),
         };
 
         if res == 0 {
@@ -275,7 +371,7 @@ impl CPU {
         }
     }
 
-    fn bit_check(&mut self, addressing_mode: &AddressingMode, bit: u8) {
+    fn bit_check(&mut self, bit: u8, addressing_mode: &AddressingMode) {
         let byte = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             _ => self.crash(format!("bit check not yet implemented or dosent exist")),
@@ -290,13 +386,12 @@ impl CPU {
     }
 
     fn reljump_zero_not_set(&mut self, addressing_mode: &AddressingMode) {
-        let data = match self.get_data(addressing_mode) {
-            DataType::ValueU8(val) => val,
-            _ => self.crash(format!("Should only be u8")),
+        let offset = match self.get_data(addressing_mode) {
+            DataType::ValueI8(val) => val,
+            _ => self.crash(format!("Should only be i8")),
         };
 
         if !self.reg.check_z_flag() {
-            let offset = data as i8;
             let temp_pc = self.pc as i16;
             let res = temp_pc + offset as i16;
             self.pc = res as u16
@@ -306,10 +401,11 @@ impl CPU {
     // Execution methods
 
     fn execute_next_opcode(&mut self) -> u32 {
+        // Get next instruction
         let mut code = self.memory.read_u8(self.pc);
         let prefixed = code == 0xcb;
 
-        let (opcode_bytes, opcode_cycles, addressing_mode) = {
+        let (opcode_bytes, opcode_cycles, lhs, rhs) = {
             let opcode_set = if prefixed {
                 code = self.memory.read_u8(self.pc + 1);
                 &self.prefixed_opcodes
@@ -330,26 +426,25 @@ impl CPU {
             (
                 opcode.bytes as u16,
                 opcode.cycles as u32,
-                opcode.addressing_mode.clone(),
+                opcode.lhs.clone(),
+                opcode.rhs.clone(),
             )
         };
 
+        // Execute instruction
         if prefixed {
             code = self.memory.read_u8(self.pc + 1);
             match code {
-                0x7c => self.bit_check(&addressing_mode, 7),
+                0x7c => self.bit_check(7, &rhs),
                 _ => self.crash(format!("Prefixed code {:#04x} not implemented", code)),
             }
         } else {
             match code {
-                0x0e => self.load_register(&addressing_mode, Register::C),
-                0x3e => self.load_register(&addressing_mode, Register::A),
-                0x21 => self.load_register(&addressing_mode, Register::HL),
-                0x31 => self.load_register(&addressing_mode, Register::SP),
-                0xe2 => self.store_val_from_a(&addressing_mode, AlterHL::None),
-                0x20 => self.reljump_zero_not_set(&addressing_mode),
-                0x32 => self.store_val_from_a(&addressing_mode, AlterHL::Dec),
-                0xaf => self.xor_with_a(&addressing_mode),
+                0x0c => self.increment_r8(Register::C),
+                0x0e | 0x21 | 0x31 | 0x3e | 0xe2 | 0x77 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::None),
+                0x32 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::DecHL),
+                0x20 => self.reljump_zero_not_set(&rhs),
+                0xaf => self.xor_with_a(&rhs),
                 _ => {
                     println!("Unknown opcode: {:#04x}", code);
                     println!("PC: {:#06x}", self.pc);
