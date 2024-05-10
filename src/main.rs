@@ -1,7 +1,7 @@
 mod cpu;
 mod drivers;
 
-use cpu::cpu::CPU;
+use cpu::CPU;
 use std::error::Error;
 
 use drivers::display::{Display, WHITE};

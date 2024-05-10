@@ -11,6 +11,7 @@ pub enum Register {
     E,
     H,
     L,
+    AF,
     BC,
     DE,
     HL,
@@ -22,17 +23,17 @@ pub enum AddressingMode {
     ImmediateRegister(Register),
     AddressRegister(Register),
     ImmediateU8,
-    JoypadU8,
+    AddressHRAM,
     ImmediateI8,
     ImmediateU16,
-    AdressU16,
+    AddressU16,
     IoAdressOffset,
     None,
 }
 
 pub struct Opcode {
     pub code: u8,
-    pub name: String,
+    pub asm: String,
     pub bytes: u8,
     pub cycles: u8,
     pub lhs: AddressingMode,
@@ -42,7 +43,7 @@ pub struct Opcode {
 impl Opcode {
     pub fn new(
         code: u8,
-        name: String,
+        asm: String,
         bytes: u8,
         cycles: u8,
         lhs: AddressingMode,
@@ -50,7 +51,7 @@ impl Opcode {
     ) -> Self {
         Opcode {
             code,
-            name,
+            asm,
             bytes,
             cycles,
             lhs,
@@ -68,6 +69,15 @@ impl Opcode {
                 AddressingMode::ImmediateRegister(Register::C),
                 AddressingMode::None,
             ),
+            // Load Instructions
+            Opcode::new(
+                0x06,
+                "LD B, n8".to_string(),
+                2,
+                2,
+                AddressingMode::ImmediateRegister(Register::B),
+                AddressingMode::ImmediateU8,
+            ),
             Opcode::new(
                 0x0e,
                 "LD C, n8".to_string(),
@@ -75,6 +85,22 @@ impl Opcode {
                 2,
                 AddressingMode::ImmediateRegister(Register::C),
                 AddressingMode::ImmediateU8,
+            ),
+            Opcode::new(
+                0x11,
+                "LD DE, n16".to_string(),
+                3,
+                3,
+                AddressingMode::ImmediateRegister(Register::DE),
+                AddressingMode::ImmediateU16,
+            ),
+            Opcode::new(
+                0x1a,
+                "LD A, [DE]".to_string(),
+                1,
+                2,
+                AddressingMode::ImmediateRegister(Register::A),
+                AddressingMode::AddressRegister(Register::DE),
             ),
             Opcode::new(
                 0x3e,
@@ -117,6 +143,22 @@ impl Opcode {
                 AddressingMode::ImmediateRegister(Register::A),
             ),
             Opcode::new(
+                0x4f,
+                "LD C, A".to_string(),
+                1,
+                2,
+                AddressingMode::ImmediateRegister(Register::C),
+                AddressingMode::ImmediateRegister(Register::A),
+            ),
+            Opcode::new(
+                0xe0,
+                "LDH [a8], A".to_string(),
+                2,
+                3,
+                AddressingMode::AddressHRAM,
+                AddressingMode::ImmediateRegister(Register::A),
+            ),
+            Opcode::new(
                 0xe2,
                 "LD [C], A".to_string(),
                 1,
@@ -124,6 +166,7 @@ impl Opcode {
                 AddressingMode::IoAdressOffset,
                 AddressingMode::ImmediateRegister(Register::A),
             ),
+            // Logic and Bit Instructions
             Opcode::new(
                 0xaf,
                 "XOR A".to_string(),
@@ -133,6 +176,23 @@ impl Opcode {
                 AddressingMode::ImmediateRegister(Register::A),
             ),
             Opcode::new(
+                0x17,
+                "RLA".to_string(),
+                1,
+                1,
+                AddressingMode::ImmediateRegister(Register::A),
+                AddressingMode::None,
+            ),
+            // Jump/Call Instructions
+            Opcode::new(
+                0xcd,
+                "CALL a16".to_string(),
+                3,
+                6,
+                AddressingMode::AddressU16,
+                AddressingMode::None
+            ),
+            Opcode::new(
                 0x20,
                 "JR NZ, e8".to_string(),
                 2,
@@ -140,6 +200,23 @@ impl Opcode {
                 AddressingMode::None,
                 AddressingMode::ImmediateI8,
             ),
+            // Stack
+            Opcode::new(
+                0xc5,
+                "PUSH BC".to_string(),
+                1,
+                4,
+                AddressingMode::ImmediateRegister(Register::BC),
+                AddressingMode::None,
+            ),
+            Opcode::new(
+                0xc1,
+                "POP BC".to_string(),
+                1,
+                4,
+                AddressingMode::ImmediateRegister(Register::BC),
+                AddressingMode::None
+            )
         ];
 
         let mut map = HashMap::new();
@@ -150,14 +227,26 @@ impl Opcode {
     }
 
     pub fn generate_prefixed_opcode_map() -> HashMap<u8, Opcode> {
-        let opcodes: Vec<Opcode> = vec![Opcode::new(
-            0x7c,
-            "BIT 7, H".to_string(),
-            2,
-            2,
-            AddressingMode::None,
-            AddressingMode::ImmediateRegister(Register::H),
-        )];
+        let opcodes: Vec<Opcode> = vec![
+            // Bit check instructions
+            Opcode::new(
+                0x7c,
+                "BIT 7, H".to_string(),
+                2,
+                2,
+                AddressingMode::None,
+                AddressingMode::ImmediateRegister(Register::H),
+            ),
+            // Rotate instructions
+            Opcode::new(
+                0x11,
+                "RL C".to_string(),
+                2,
+                2,
+                AddressingMode::ImmediateRegister(Register::C),
+                AddressingMode::None
+            )
+        ];
 
         let mut map = HashMap::new();
         for op in opcodes {

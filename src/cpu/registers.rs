@@ -24,6 +24,15 @@ impl Registers {
         }
     }
 
+    pub fn af(&self) -> u16 {
+        (self.a as u16) << 8 | (self.f as u16)
+    }
+
+    pub fn set_af(&mut self, value: u16) {
+        self.a = ((value & 0xFF00) >> 8) as u8;
+        self.f = (value & 0xFF) as u8;
+    }
+
     pub fn bc(&self) -> u16 {
         (self.b as u16) << 8 | (self.c as u16)
     }
@@ -59,8 +68,8 @@ impl Registers {
         self.f &= !(1 << 7);
     }
 
-    pub fn check_z_flag(&self) -> bool {
-        (self.f & (1 << 7)) > 0
+    pub fn get_z_flag(&self) -> u8 {
+        (self.f & (1 << 7)) >> 7
     }
 
     pub fn set_n_flag(&mut self) {
@@ -71,8 +80,8 @@ impl Registers {
         self.f &= !(1 << 6);
     }
 
-    pub fn check_n_flag(&self) -> bool {
-        (self.f & (1 << 6)) > 0
+    pub fn get_n_flag(&self) -> u8 {
+        (self.f & (1 << 6)) >> 6
     }
 
     pub fn set_h_flag(&mut self) {
@@ -83,8 +92,8 @@ impl Registers {
         self.f &= !(1 << 5);
     }
 
-    pub fn check_h_flag(&self) -> bool {
-        (self.f & (1 << 5)) > 0
+    pub fn get_h_flag(&self) -> u8 {
+        (self.f & (1 << 5)) >> 5
     }
 
     pub fn set_c_flag(&mut self) {
@@ -95,7 +104,7 @@ impl Registers {
         self.f &= !(1 << 4);
     }
 
-    pub fn check_c_flag(&self) -> bool {
-        (self.f & (1 << 4)) > 0
+    pub fn get_c_flag(&self) -> u8 {
+        (self.f & (1 << 4)) >> 4
     }
 }
