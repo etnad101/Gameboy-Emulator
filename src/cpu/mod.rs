@@ -385,6 +385,7 @@ impl CPU {
     }
 
     fn decrement(&mut self, addressing_mode: &AddressingMode) {
+        todo!();
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => {
                 let (diff, borrow) = match reg {
