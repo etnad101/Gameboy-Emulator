@@ -3,8 +3,8 @@ mod registers;
 
 use chrono::{DateTime, Local};
 
-use crate::cpu::opcodes::Register;
 use crate::cpu::registers::Registers;
+use crate::cpu::opcodes::Register;
 use std::{collections::HashMap, fs};
 
 use opcodes::{AddressingMode, Opcode};
@@ -218,9 +218,13 @@ impl CPU {
     }
 
     pub fn pop_stack(&mut self) -> u16 {
-        let byte = self.memory.read_u16(self.sp);
-        self.sp += 2;
-        byte
+        self.sp += 1;
+        let lo = self.memory.read_u8(self.sp);
+        self.memory.write_u8(self.sp, 0);
+        self.sp += 1;
+        let hi = self.memory.read_u8(self.sp);
+        self.memory.write_u8(self.sp, 0);
+        ((hi as u16 ) << 8) | lo as u16
     }
 
     // Opcode methods
@@ -305,7 +309,7 @@ impl CPU {
         }
     }
 
-    fn bit_track_add_u8(&self, lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
+    fn carry_track_add_u8(&self, lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
         let sum = lhs.wrapping_add(rhs);
         let bit_check = lhs & rhs;
         let mut tracked_bits = [false; 8];
@@ -315,60 +319,43 @@ impl CPU {
                 tracked_bits[i] = true;
             }
         }
-        (sum, [false; 8])
+        (sum, tracked_bits)
     }
 
-    fn bit_track_sub_u8(&self, lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
+    fn borrow_track_sub_u8(&self, lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
         let sum = lhs.wrapping_sub(rhs);
-        let bit_check = lhs & rhs;
         let mut tracked_bits = [false; 8];
-        for i in 0..8 {
-            let bit = bit_check & (1 << i);
-            if bit > 0 {
-                tracked_bits[i] = true;
+        for i in 0..7 {
+            let bit = lhs & (1 << i);
+            if bit == 0 {
+                tracked_bits[i + 1] = true;
             }
         }
-        (sum, [false; 8])
+        (sum, tracked_bits)
     }
 
-    fn increment_r8(&mut self, register: Register) {
-        let (sum, overflow) = match register {
-            Register::A => {
-                let (sum, overflow) = self.bit_track_add_u8(self.reg.a, 1);
-                self.reg.a = sum;
-                (sum, overflow)
-            }
-            Register::B => {
-                let (sum, overflow) = self.bit_track_add_u8(self.reg.b, 1);
-                self.reg.b = sum;
-                (sum, overflow)
-            }
-            Register::C => {
-                let (sum, overflow) = self.bit_track_add_u8(self.reg.c, 1);
-                self.reg.c = sum;
-                (sum, overflow)
-            }
-            Register::D => {
-                let (sum, overflow) = self.bit_track_add_u8(self.reg.d, 1);
-                self.reg.d = sum;
-                (sum, overflow)
-            }
-            Register::E => {
-                let (sum, overflow) = self.bit_track_add_u8(self.reg.e, 1);
-                self.reg.e = sum;
-                (sum, overflow)
-            }
-            Register::H => {
-                let (sum, overflow) = self.bit_track_add_u8(self.reg.h, 1);
-                self.reg.h = sum;
-                (sum, overflow)
-            }
-            Register::L => {
-                let (sum, overflow) = self.bit_track_add_u8(self.reg.l, 1);
-                self.reg.l = sum;
-                (sum, overflow)
-            }
-            _ => self.crash("expected 8 bit register".to_string()),
+    fn increment_u8(&mut self, addressing_mode: &AddressingMode) {
+        let (sum, overflow) = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => self.carry_track_add_u8(val, 1),
+            _ => self.crash("Expected u8 here".to_string()),
+        };
+
+        match addressing_mode {
+            AddressingMode::ImmediateRegister(reg) => match reg {
+                Register::A => self.reg.a = sum,
+                Register::B => self.reg.b = sum,
+                Register::C => self.reg.c = sum,
+                Register::D => self.reg.d = sum,
+                Register::E => self.reg.e = sum,
+                Register::H => self.reg.h = sum,
+                Register::L => self.reg.l = sum,
+                _ => self.crash("expected 8 bit register".to_string()),
+            },
+            AddressingMode::AddressRegister(reg) => match reg {
+                Register::HL => self.memory.write_u8(self.reg.hl(), sum),
+                _ => self.crash("Should only have [HL] here".to_string()),
+            },
+            _ => self.crash("Only use this fucntion for u8 values".to_string()),
         };
 
         if sum == 0 {
@@ -384,50 +371,58 @@ impl CPU {
         }
     }
 
-    fn decrement(&mut self, addressing_mode: &AddressingMode) {
-        todo!();
+    fn increment_u16(&mut self, addressing_mode: &AddressingMode) {
+        let sum = match self.get_data(addressing_mode) {
+            DataType::ValueU16(val) => val.wrapping_add(1),
+            _ => self.crash("Expected u16 here".to_string()),
+        };
+
         match addressing_mode {
-            AddressingMode::ImmediateRegister(reg) => {
-                let (diff, borrow) = match reg {
-                Register::A => {
-                    let (sum, overflow) = self.bit_track_sub_u8(self.reg.a, 1);
-                    self.reg.a = sum;
-                    (sum, overflow)
-                }
-                Register::B => {
-                    let (sum, overflow) = self.bit_track_sub_u8(self.reg.b, 1);
-                    self.reg.b = sum;
-                    (sum, overflow)
-                }
-                Register::C => {
-                    let (sum, overflow) = self.bit_track_sub_u8(self.reg.c, 1);
-                    self.reg.c = sum;
-                    (sum, overflow)
-                }
-                Register::D => {
-                    let (sum, overflow) = self.bit_track_sub_u8(self.reg.d, 1);
-                    self.reg.d = sum;
-                    (sum, overflow)
-                }
-                Register::E => {
-                    let (sum, overflow) = self.bit_track_sub_u8(self.reg.e, 1);
-                    self.reg.e = sum;
-                    (sum, overflow)
-                }
-                Register::H => {
-                    let (sum, overflow) = self.bit_track_sub_u8(self.reg.h, 1);
-                    self.reg.h = sum;
-                    (sum, overflow)
-                }
-                Register::L => {
-                    let (sum, overflow) = self.bit_track_sub_u8(self.reg.l, 1);
-                    self.reg.l = sum;
-                    (sum, overflow)
-                }
-                _ => todo!()
-            };
+            AddressingMode::ImmediateRegister(reg) => match reg {
+                Register::BC => self.reg.set_bc(sum),
+                Register::DE => self.reg.set_de(sum),
+                Register::HL => self.reg.set_hl(sum),
+                _ => self.crash("Expected 16 bit register".to_string()),
+            }
+            _ => self.crash("Expected 16 bit register".to_string()),
         }
-        _ => todo!()
+    }
+
+    fn decrement_u8(&mut self, addressing_mode: &AddressingMode) {
+        let (diff, borrow) = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => self.borrow_track_sub_u8(val, 1),
+            _ => self.crash("Expected u8 here".to_string()),
+        };
+
+        match addressing_mode {
+            AddressingMode::ImmediateRegister(reg) => match reg {
+                Register::A => self.reg.a = diff,
+                Register::B => self.reg.b = diff,
+                Register::C => self.reg.c = diff,
+                Register::D => self.reg.d = diff,
+                Register::E => self.reg.e = diff,
+                Register::H => self.reg.h = diff,
+                Register::L => self.reg.l = diff,
+                _ => todo!(),
+            },
+
+            AddressingMode::AddressRegister(reg) => match reg {
+                Register::HL => self.memory.write_u8(self.reg.hl(), diff),
+                _ => self.crash("Should only have [HL] here".to_string()),
+            },
+            _ => self.crash("Only use this fucntion for u8 values".to_string()),
+        }
+
+        if diff == 0 {
+            self.reg.set_z_flag()
+        } else {
+            self.reg.clear_z_flag()
+        }
+
+        if borrow[4] {
+            self.reg.set_h_flag()
+        } else {
+            self.reg.clear_h_flag()
         }
     }
 
@@ -465,8 +460,13 @@ impl CPU {
             _ => self.crash("Should only have an address here".to_string()),
         };
 
-        self.push_stack(addr);
+        self.push_stack(self.pc);
         self.pc = addr;
+    }
+
+    fn ret(&mut self) {
+        // add 3 to account for call instruction size
+        self.pc = self.pop_stack() + 3;
     }
 
     fn push_stack_instr(&mut self, addressing_mode: &AddressingMode) {
@@ -599,15 +599,22 @@ impl CPU {
             }
         } else {
             match code {
-                0x0c => self.increment_r8(Register::C),
+                0x05 => self.decrement_u8(&lhs),
+                0x0c => self.increment_u8(&lhs),
+                0x23 => self.increment_u16(&lhs),
                 0x06 | 0x0e | 0x11 | 0x1a | 0x21 | 0x31 | 0x3e | 0x4f | 0x77 | 0xe0 | 0xe2 => {
                     self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::None)
                 }
                 0x17 => self.rotate_left_through_carry(&lhs, false),
                 0x20 => self.reljump_zero_not_set(&rhs),
+                0x22 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::IncHL),
                 0x32 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::DecHL),
                 0xc1 => self.pop_stack_instr(&lhs),
                 0xc5 => self.push_stack_instr(&lhs),
+                0xc9 => {
+                    skip_pc_increase = true;
+                    self.ret();
+                }
                 0xcd => {
                     skip_pc_increase = true;
                     self.call(&lhs);

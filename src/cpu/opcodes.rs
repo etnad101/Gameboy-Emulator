@@ -61,12 +61,29 @@ impl Opcode {
 
     pub fn generate_normal_opcode_map() -> HashMap<u8, Opcode> {
         let opcodes: Vec<Opcode> = vec![
+            // Inc/Dec Instructions
+            Opcode::new(
+                0x05,
+                "DEC B".to_string(),
+                1,
+                1,
+                AddressingMode::ImmediateRegister(Register::B),
+                AddressingMode::None,
+            ),
             Opcode::new(
                 0x0c,
                 "INC C".to_string(),
                 1,
                 1,
                 AddressingMode::ImmediateRegister(Register::C),
+                AddressingMode::None,
+            ),
+            Opcode::new(
+                0x23,
+                "INC HL".to_string(),
+                1,
+                2,
+                AddressingMode::ImmediateRegister(Register::HL),
                 AddressingMode::None,
             ),
             // Load Instructions
@@ -103,6 +120,14 @@ impl Opcode {
                 AddressingMode::AddressRegister(Register::DE),
             ),
             Opcode::new(
+                0x22,
+                "LD [HLI], A".to_string(),
+                1,
+                2,
+                AddressingMode::AddressRegister(Register::HL),
+                AddressingMode::ImmediateRegister(Register::A),
+            ),
+            Opcode::new(
                 0x3e,
                 "LD A, n8".to_string(),
                 2,
@@ -132,7 +157,7 @@ impl Opcode {
                 1,
                 2,
                 AddressingMode::AddressRegister(Register::HL),
-                AddressingMode::ImmediateRegister(Register::A)
+                AddressingMode::ImmediateRegister(Register::A),
             ),
             Opcode::new(
                 0x32,
@@ -190,7 +215,15 @@ impl Opcode {
                 3,
                 6,
                 AddressingMode::AddressU16,
-                AddressingMode::None
+                AddressingMode::None,
+            ),
+            Opcode::new(
+                0xc9,
+                "RET".to_string(),
+                1,
+                4,
+                AddressingMode::None,
+                AddressingMode::None,
             ),
             Opcode::new(
                 0x20,
@@ -215,8 +248,8 @@ impl Opcode {
                 1,
                 4,
                 AddressingMode::ImmediateRegister(Register::BC),
-                AddressingMode::None
-            )
+                AddressingMode::None,
+            ),
         ];
 
         let mut map = HashMap::new();
@@ -244,8 +277,8 @@ impl Opcode {
                 2,
                 2,
                 AddressingMode::ImmediateRegister(Register::C),
-                AddressingMode::None
-            )
+                AddressingMode::None,
+            ),
         ];
 
         let mut map = HashMap::new();
