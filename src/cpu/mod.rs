@@ -601,8 +601,9 @@ impl CPU {
             match code {
                 0x05 => self.decrement_u8(&lhs),
                 0x0c => self.increment_u8(&lhs),
+                0x13 => self.increment_u16(&lhs),
                 0x23 => self.increment_u16(&lhs),
-                0x06 | 0x0e | 0x11 | 0x1a | 0x21 | 0x31 | 0x3e | 0x4f | 0x77 | 0xe0 | 0xe2 => {
+                0x06 | 0x0e | 0x11 | 0x1a | 0x21 | 0x31 | 0x3e | 0x4f | 0x77 | 0x7b | 0xe0 | 0xe2 => {
                     self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::None)
                 }
                 0x17 => self.rotate_left_through_carry(&lhs, false),
@@ -657,6 +658,7 @@ impl CPU {
     }
 
     pub fn update(&mut self) {
+        println!("start frame");
         let mut cycles_this_frame = 0;
 
         while cycles_this_frame < MAX_CYCLES as u32 {

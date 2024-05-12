@@ -55,7 +55,7 @@ impl Display {
         Ok(())
     }
 
-    pub fn limit_update_rate(&mut self, rate: Option<std::time::Duration>) {
+    pub fn limit_frame_rate(&mut self, rate: Option<std::time::Duration>) {
        self.window.limit_update_rate(rate); 
     }
 
