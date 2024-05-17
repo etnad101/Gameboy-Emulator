@@ -3,8 +3,8 @@ mod registers;
 
 use chrono::{DateTime, Local};
 
-use crate::cpu::registers::Registers;
 use crate::cpu::opcodes::Register;
+use crate::cpu::registers::Registers;
 use std::{collections::HashMap, fs};
 
 use opcodes::{AddressingMode, Opcode};
@@ -14,6 +14,14 @@ const MEM_SIZE: usize = 0xFFFF;
 const MAX_CYCLES: usize = 69905;
 
 const DEBUG: bool = true;
+
+enum JumpCondition {
+    Z,
+    NZ,
+    C,
+    NC,
+    None,
+}
 
 enum StoreLoadModifier {
     IncHL,
@@ -123,6 +131,8 @@ impl CPU {
 
             if i % 32 == 0 {
                 self.debug_log.push_str(&format!("\n|{:#06x}| ", i));
+            } else if i % 16 == 0 {
+                self.debug_log.push_str(&format!("|{:#06x}| ", i));
             } else if i % 8 == 0 {
                 self.debug_log.push_str(" ");
             }
@@ -196,7 +206,9 @@ impl CPU {
             },
             AddressingMode::ImmediateU8 => DataType::ValueU8(self.memory.read_u8(self.pc + 1)),
             AddressingMode::AddressHRAM => {
-                DataType::Address(0xFF00 + self.memory.read_u8(self.pc + 1) as u16)
+                let hi: u16 = 0xFF << 8;
+                let lo: u16 = self.memory.read_u8(self.pc + 1) as u16;
+                DataType::Address(hi & lo)
             }
             AddressingMode::ImmediateI8 => {
                 DataType::ValueI8(self.memory.read_u8(self.pc + 1) as i8)
@@ -224,7 +236,7 @@ impl CPU {
         self.sp += 1;
         let hi = self.memory.read_u8(self.sp);
         self.memory.write_u8(self.sp, 0);
-        ((hi as u16 ) << 8) | lo as u16
+        ((hi as u16) << 8) | lo as u16
     }
 
     // Opcode methods
@@ -383,7 +395,7 @@ impl CPU {
                 Register::DE => self.reg.set_de(sum),
                 Register::HL => self.reg.set_hl(sum),
                 _ => self.crash("Expected 16 bit register".to_string()),
-            }
+            },
             _ => self.crash("Expected 16 bit register".to_string()),
         }
     }
@@ -441,17 +453,50 @@ impl CPU {
         }
     }
 
-    fn reljump_zero_not_set(&mut self, addressing_mode: &AddressingMode) {
+    fn reljump(&mut self, addressing_mode: &AddressingMode, condition: JumpCondition) -> u32 {
         let offset = match self.get_data(addressing_mode) {
             DataType::ValueI8(val) => val,
             _ => self.crash(format!("Should only be i8")),
         };
 
-        if self.reg.get_z_flag() == 0 {
-            let temp_pc = self.pc as i16;
-            let res = temp_pc + offset as i16;
-            self.pc = res as u16
+        let mut jump = false;
+        let extra_cycles = match condition {
+            JumpCondition::Z => {
+                if self.reg.get_z_flag() != 0 {
+                    jump = true
+                };
+                1
+            }
+            JumpCondition::NZ => {
+                if self.reg.get_z_flag() == 0 {
+                    jump = true
+                };
+                1
+            }
+            JumpCondition::C => {
+                if self.reg.get_c_flag() != 0 {
+                    jump = true
+                };
+                1
+            }
+            JumpCondition::NC => {
+                if self.reg.get_c_flag() == 0 {
+                    jump = true
+                };
+                1
+            }
+            JumpCondition::None => {
+                jump = true;
+                0
+            }
+        };
+
+        if jump {
+            let res: i16 = (self.pc as i16) + offset as i16;
+            self.pc = res as u16;
         }
+
+        extra_cycles
     }
 
     fn call(&mut self, addressing_mode: &AddressingMode) {
@@ -553,8 +598,38 @@ impl CPU {
             _ => self.crash("Should only have r8 or address register".to_string()),
         }
     }
-    // Execution methods
 
+    fn compare_a(&mut self, addressing_mode: &AddressingMode) {
+        let value = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => val,
+            DataType::Address(addr) => self.memory.read_u8(addr),
+            _ => self.crash("Should only have u8 value".to_string()),
+        };
+
+        let (diff, borrow) = self.borrow_track_sub_u8(self.reg.a, value);
+
+        if diff == 0 {
+            self.reg.set_z_flag();
+        } else {
+            self.reg.clear_z_flag();
+        }
+
+        self.reg.set_n_flag();
+
+        if borrow[4] {
+            self.reg.set_h_flag();
+        } else {
+            self.reg.clear_h_flag();
+        }
+
+        if value > self.reg.a {
+            self.reg.set_c_flag();
+        } else {
+            self.reg.clear_c_flag();
+        }
+    }
+
+    // Execution methods
     fn execute_next_opcode(&mut self) -> u32 {
         // Get next instruction
         let mut code = self.memory.read_u8(self.pc);
@@ -589,6 +664,7 @@ impl CPU {
 
         // Execute instruction
         let mut skip_pc_increase = false;
+        let mut extra_cycles = 0;
 
         if prefixed {
             code = self.memory.read_u8(self.pc + 1);
@@ -599,17 +675,20 @@ impl CPU {
             }
         } else {
             match code {
-                0x05 => self.decrement_u8(&lhs),
+                0x04 | 0x05 | 0x3d => self.decrement_u8(&lhs),
                 0x0c => self.increment_u8(&lhs),
-                0x13 => self.increment_u16(&lhs),
-                0x23 => self.increment_u16(&lhs),
-                0x06 | 0x0e | 0x11 | 0x1a | 0x21 | 0x31 | 0x3e | 0x4f | 0x77 | 0x7b | 0xe0 | 0xe2 => {
+                0x0d => self.decrement_u8(&lhs),
+                0x13 | 0x23 => self.increment_u16(&lhs),
+                0x06 | 0x0e | 0x11 | 0x1a | 0x1e | 0x21 | 0x2e | 0x31 | 0x3e | 0x4f | 0x57
+                | 0x67 | 0x77 | 0x7b | 0xe0 | 0xe2 | 0xea | 0xf0 => {
                     self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::None)
                 }
-                0x17 => self.rotate_left_through_carry(&lhs, false),
-                0x20 => self.reljump_zero_not_set(&rhs),
                 0x22 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::IncHL),
                 0x32 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::DecHL),
+                0x17 => self.rotate_left_through_carry(&lhs, false),
+                0x18 => extra_cycles = self.reljump(&rhs, JumpCondition::None),
+                0x20 => extra_cycles = self.reljump(&rhs, JumpCondition::NZ),
+                0x28 => extra_cycles = self.reljump(&rhs, JumpCondition::Z),
                 0xc1 => self.pop_stack_instr(&lhs),
                 0xc5 => self.push_stack_instr(&lhs),
                 0xc9 => {
@@ -621,6 +700,7 @@ impl CPU {
                     self.call(&lhs);
                 }
                 0xaf => self.xor_with_a(&rhs),
+                0xfe => self.compare_a(&rhs),
                 _ => {
                     println!("Unknown opcode: {:#04x}", code);
                     println!("PC: {:#06x}", self.pc);
@@ -638,7 +718,7 @@ impl CPU {
             self.log_debug_info(opcode_asm);
         }
 
-        opcode_cycles as u32
+        opcode_cycles + extra_cycles
     }
 
     fn update_timers(&self, cycles: u32) {
