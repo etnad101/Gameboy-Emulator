@@ -158,10 +158,10 @@ impl CPU {
             .push_str(&format!("\nH: {:#04x}, L: {:#04x}", self.reg.h, self.reg.l));
         self.debug_log.push_str("\n");
         self.debug_log
-            .push_str(&format!("\nProgram Coutner: {:#04x}; ", self.pc));
+            .push_str(&format!("\nProgram Counter: {:#04x}; ", self.pc));
     }
 
-    fn crash(&mut self, msg: String) -> ! {
+    pub fn crash(&mut self, msg: String) -> ! {
         if DEBUG {
             self.dump_mem();
             let dt = Local::now();
@@ -208,7 +208,8 @@ impl CPU {
             AddressingMode::AddressHRAM => {
                 let hi: u16 = 0xFF << 8;
                 let lo: u16 = self.memory.read_u8(self.pc + 1) as u16;
-                DataType::Address(hi & lo)
+                let addr = hi | lo;
+                DataType::Address(addr)
             }
             AddressingMode::ImmediateI8 => {
                 DataType::ValueI8(self.memory.read_u8(self.pc + 1) as i8)
@@ -738,7 +739,6 @@ impl CPU {
     }
 
     pub fn update(&mut self) {
-        println!("start frame");
         let mut cycles_this_frame = 0;
 
         while cycles_this_frame < MAX_CYCLES as u32 {

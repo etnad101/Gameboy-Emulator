@@ -1,3 +1,9 @@
+/*
+* TODO
+* Create Logger for CPU
+* Implement LCD status registers
+*/
+
 mod cpu;
 mod drivers;
 
@@ -14,14 +20,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut cpu = CPU::new();
 
-    display.limit_frame_rate(Some(std::time::Duration::from_micros(16600)));
+    // Gameboy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
+    display.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
     display.clear();
+    let mut frame = 0;
 
     while display.is_open() {
-
+        if frame == 1 {
+            cpu.crash("reached set frame limit".to_string());
+        }
         cpu.update();
         display.render()?;
         display.draw_pixel(0, 0, WHITE)?;
+        
+        frame += 1;
     }
 
     Ok(())
