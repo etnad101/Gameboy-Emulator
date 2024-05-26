@@ -12,8 +12,22 @@ use opcodes::{AddressingMode, Opcode};
 const MEM_SIZE: usize = 0xFFFF;
 
 const MAX_CYCLES: usize = 69905;
+const CYCLES_PER_SCANLINE: usize = 456 / 4;
 
 const DEBUG: bool = true;
+
+enum LCDRegister {
+    LCDC = 0xFF40,
+    STAT = 0xff41,
+    SCY = 0xff42,
+    SCX = 0xff43,
+    LY = 0xff44,
+    LYC = 0xff45,
+    DMA = 0xff46,
+    BGP = 0xff47,
+    OBP0 = 0xff48,
+    OBP1 = 0xff49,
+}
 
 enum JumpCondition {
     Z,
@@ -676,12 +690,11 @@ impl CPU {
             }
         } else {
             match code {
-                0x04 | 0x05 | 0x3d => self.decrement_u8(&lhs),
-                0x0c => self.increment_u8(&lhs),
-                0x0d => self.decrement_u8(&lhs),
+                0x04 | 0x05 | 0x0d | 0x1d | 0x3d => self.decrement_u8(&lhs),
+                0x0c | 0x24 => self.increment_u8(&lhs),
                 0x13 | 0x23 => self.increment_u16(&lhs),
                 0x06 | 0x0e | 0x11 | 0x1a | 0x1e | 0x21 | 0x2e | 0x31 | 0x3e | 0x4f | 0x57
-                | 0x67 | 0x77 | 0x7b | 0xe0 | 0xe2 | 0xea | 0xf0 => {
+                | 0x67 | 0x77 | 0x7b | 0x7c | 0xe0 | 0xe2 | 0xea | 0xf0 => {
                     self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::None)
                 }
                 0x22 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::IncHL),
@@ -726,8 +739,14 @@ impl CPU {
         todo!()
     }
 
-    fn update_graphics(&self, cycles: u32) {
-        todo!()
+    fn update_graphics(&mut self, cycles: u32) {
+        if (cycles as usize % CYCLES_PER_SCANLINE) == 0 {
+            let mut LY = self.memory.read_u8(LCDRegister::LY as u16).wrapping_add(1);
+            if LY == 154 {
+                LY = 0;
+            }
+            self.memory.write_u8(LCDRegister::LY as u16, LY);
+        }
     }
 
     fn do_interupts(&self) {
@@ -743,12 +762,12 @@ impl CPU {
 
         while cycles_this_frame < MAX_CYCLES as u32 {
             let cycles = self.execute_next_opcode();
-
+            
             cycles_this_frame += cycles;
 
             // self.update_timers(cycles);
 
-            // self.update_graphics(cycles);
+            self.update_graphics(cycles_this_frame);
 
             // self.do_interupts();
         }
