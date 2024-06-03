@@ -7,9 +7,9 @@
 mod cpu;
 mod drivers;
 
-use cpu::CPU;
 use std::error::Error;
 
+use cpu::CPU;
 use drivers::display::{Display, WHITE};
 
 const WIDTH: usize = 160;

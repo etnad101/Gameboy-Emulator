@@ -6,7 +6,6 @@ use chrono::{DateTime, Local};
 use crate::cpu::opcodes::Register;
 use crate::cpu::registers::Registers;
 use std::{collections::HashMap, fs};
-
 use opcodes::{AddressingMode, Opcode};
 
 const MEM_SIZE: usize = 0xFFFF;
@@ -51,7 +50,7 @@ enum DataType {
     None,
 }
 
-struct MemoryBus {
+pub struct MemoryBus {
     memory: [u8; MEM_SIZE + 1],
 }
 
