@@ -5,10 +5,10 @@ use errors::*;
 
 pub type Color = u32;
 
-pub const BLACK: Color = rgb(0, 0, 0);
-pub const WHITE: Color = rgb(255, 255, 255);
+pub const BLACK: Color = 0x00000000;
+pub const WHITE: Color = 0x00FFFFFF;
 
-const fn rgb(r: u8, g: u8, b: u8) -> u32 {
+fn rgb(r: u8, g: u8, b: u8) -> u32 {
     let (r, g, b) = (r as u32, g as u32, b as u32);
     (r << 16) | (g << 8) | b
 }
@@ -30,7 +30,7 @@ impl Display {
             borderless: true,
             title: true,
             resize: false,
-            scale: minifb::Scale::X2,
+            scale: minifb::Scale::X4,
             scale_mode: minifb::ScaleMode::AspectRatioStretch,
             topmost: true,
             transparency: false,
@@ -63,7 +63,7 @@ impl Display {
         self.window.is_open() && !self.window.is_key_down(Key::Escape)
     }
 
-    pub fn draw_pixel(&mut self, x: usize, y: usize, color: Color) -> Result<(), DrawOutOfBoundsError>{
+    pub fn draw_pixel(&mut self, x: usize, y: usize, color: Color) -> Result<(), DrawOutOfBoundsError> {
         if x > self.width {
             return Err(DrawOutOfBoundsError::X(x))
         }
@@ -87,5 +87,4 @@ impl Display {
     pub fn set_background(&mut self, bg: Color) {
         self.background = bg;
     }
-
 }
