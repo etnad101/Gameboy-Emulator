@@ -5,7 +5,8 @@ use chrono::{DateTime, Local};
 
 use crate::cpu::opcodes::Register;
 use crate::cpu::registers::Registers;
-use std::{collections::HashMap, fs};
+use core::borrow;
+use std::{collections::HashMap, fs, ops::Add};
 use opcodes::{AddressingMode, Opcode};
 
 const MEM_SIZE: usize = 0xFFFF;
@@ -613,7 +614,7 @@ impl CPU {
         }
     }
 
-    fn compare_a(&mut self, addressing_mode: &AddressingMode) {
+    fn sub_a(&mut self, addressing_mode: &AddressingMode, store_result: bool) {
         let value = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.memory.read_u8(addr),
@@ -640,6 +641,10 @@ impl CPU {
             self.reg.set_c_flag();
         } else {
             self.reg.clear_c_flag();
+        }
+
+        if store_result {
+            self.reg.a = diff
         }
     }
 
@@ -712,8 +717,9 @@ impl CPU {
                     skip_pc_increase = true;
                     self.call(&lhs);
                 }
+                0x90 => self.sub_a(&rhs, true),
                 0xaf => self.xor_with_a(&rhs),
-                0xfe => self.compare_a(&rhs),
+                0xfe => self.sub_a(&rhs, false),
                 _ => {
                     println!("Unknown opcode: {:#04x}", code);
                     println!("PC: {:#06x}", self.pc);
