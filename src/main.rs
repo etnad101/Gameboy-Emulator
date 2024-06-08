@@ -55,17 +55,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut cpu = CPU::new();
 
-    let trademark_tile = Tile::from([0x3c, 0x00, 0x42, 0x00, 0xb9, 0x00, 0xa5, 0x00, 0xb9, 0x00, 0xa5, 0x00, 0x42, 0x00, 0x3c, 0x00]);
-
     // Gameboy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     display.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
     display.set_background(WHITE);
+
     while display.is_open() {
         display.clear();
-        display.draw_tile(0, 0, &trademark_tile)?;
-        // cpu.update();
+        cpu.update();
         display.render()?;
-
     }
 
     Ok(())
