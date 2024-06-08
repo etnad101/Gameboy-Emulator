@@ -68,6 +68,7 @@ impl Opcode {
             Opcode::new(0x0c, "INC C".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::C), AddressingMode::None),
             Opcode::new(0x0d, "DEC C".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::C), AddressingMode::None),
             Opcode::new(0x13, "INC DE".to_string(), 1, 2, AddressingMode::ImmediateRegister(Register::DE), AddressingMode::None),
+            Opcode::new(0x15, "DEC D".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::D), AddressingMode::None),
             Opcode::new(0x1d, "DEC E".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::E), AddressingMode::None),
             Opcode::new(0x23, "INC HL".to_string(), 1, 2, AddressingMode::ImmediateRegister(Register::HL), AddressingMode::None),
             Opcode::new(0x24, "INC H".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::H), AddressingMode::None),

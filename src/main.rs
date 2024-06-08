@@ -50,43 +50,22 @@ impl Tile {
     }
 }
 
-
 fn main() -> Result<(), Box<dyn Error>> {
     let mut display = Display::new(WIDTH, HEIGHT)?;
 
     let mut cpu = CPU::new();
 
-    let tile_data: [u8; 16] = [0x3C, 0x7E, 0x42, 0x42, 0x42, 0x42, 0x42, 0x42, 0x7E, 0x5E, 0x7E, 0x0A, 0x7C, 0x56, 0x38, 0x7C];
-    let tile_data = Tile::from(tile_data).get_data();
+    let trademark_tile = Tile::from([0x3c, 0x00, 0x42, 0x00, 0xb9, 0x00, 0xa5, 0x00, 0xb9, 0x00, 0xa5, 0x00, 0x42, 0x00, 0x3c, 0x00]);
+
     // Gameboy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     display.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
-    display.clear();
-
+    display.set_background(WHITE);
     while display.is_open() {
-        {
-            // Display tile date
-            let mut x = 0;
-            let mut y = 0;
-            for data in tile_data {
-                let color: Color = match data {
-                    0 => 0x00FFFFFF,
-                    1 => 0x00BBBBBB,
-                    2 => 0x00777777,
-                    3 => 0x00000000,
-                    _ => panic!("Should not have any other color here"),
-                };
-
-                display.draw_pixel(x, y, color)?;
-                x += 1;
-                if x == 8 {
-                    y += 1;
-                    x = 0;
-                }
-            }
-        }
+        display.clear();
+        display.draw_tile(0, 0, &trademark_tile)?;
         // cpu.update();
         display.render()?;
-        
+
     }
 
     Ok(())
