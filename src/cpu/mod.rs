@@ -569,11 +569,12 @@ impl CPU {
             _ => self.crash(format!("bit check not yet implemented or dosent exist")),
         };
 
-        if (byte & (1 << bit)) == 0 {
+        if byte.get_bit(bit) == 0 {
             self.reg.set_z_flag();
         } else {
             self.reg.clear_z_flag();
         }
+        self.reg.clear_n_flag();
         self.reg.set_h_flag();
     }
 
@@ -770,7 +771,32 @@ impl CPU {
 
     fn render_screen(&self) -> Vec<u32> {
         let mut buff = vec![0; 160 * 144];
+
         // get tile
+        let fetcher_x = 0;
+        let fetcher_y = 0;
+        let lcdc = self.memory.read_u8(LCDRegister::LCDC as u16);
+        // change false to chekc if x coordinate of current scanline is in window
+        let tilemap_base = if (lcdc.get_bit(3) == 1) && (false) {
+            0x9c00 
+        } else if (lcdc.get_bit(6) == 1) && (false) {
+            0x9c00 
+        } else {
+            0x9800 
+        };
+
+        let tilemap_addr = tilemap_base + fetcher_x;
+        let tile_offset = self.memory.read_u8(tilemap_addr) as u16;
+
+        let tile_addr = if lcdc.get_bit(4) == 1 {
+           0x8000 + (tile_offset * 16)
+        } else {
+            let offset = (tile_offset as i8) as i32 * 16;
+            (0x9000 + offset) as u16
+        };
+
+        
+
         buff
     }
 
