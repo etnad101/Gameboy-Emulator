@@ -1,3 +1,5 @@
+use super::GetBit;
+
 pub struct Registers {
     pub a: u8,
     pub b: u8,
@@ -69,7 +71,7 @@ impl Registers {
     }
 
     pub fn get_z_flag(&self) -> u8 {
-        (self.f & (1 << 7)) >> 7
+        self.f.get_bit(7)
     }
 
     pub fn set_n_flag(&mut self) {
@@ -81,7 +83,7 @@ impl Registers {
     }
 
     pub fn get_n_flag(&self) -> u8 {
-        (self.f & (1 << 6)) >> 6
+        self.f.get_bit(6)
     }
 
     pub fn set_h_flag(&mut self) {
@@ -93,7 +95,7 @@ impl Registers {
     }
 
     pub fn get_h_flag(&self) -> u8 {
-        (self.f & (1 << 5)) >> 5
+        self.f.get_bit(5)
     }
 
     pub fn set_c_flag(&mut self) {
@@ -105,6 +107,6 @@ impl Registers {
     }
 
     pub fn get_c_flag(&self) -> u8 {
-        (self.f & (1 << 4)) >> 4
+        self.f.get_bit(4)
     }
 }

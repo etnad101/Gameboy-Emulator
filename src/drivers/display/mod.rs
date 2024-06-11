@@ -88,6 +88,10 @@ impl Display {
         }
     }
 
+    pub fn set_buffer(&mut self, buff: Vec<u32>) {
+        self.buffer = buff;
+    }
+
     pub fn set_background(&mut self, bg: Color) {
         self.background = bg;
     }

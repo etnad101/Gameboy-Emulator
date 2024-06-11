@@ -1,7 +1,9 @@
 /*
 * TODO
 * Create Logger for CPU
-* Implement LCD status registers
+* Create live debugger
+* Need support for palettes, tile data, background tile maps, vertical scrolling (register 0xFF42), and register @ 0xFF44
+* Implement timer
 */
 
 mod cpu;

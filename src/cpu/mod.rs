@@ -16,6 +16,16 @@ const CYCLES_PER_SCANLINE: usize = 456 / 4;
 
 const DEBUG: bool = true;
 
+trait GetBit {
+    fn get_bit(&self, bit: u8) -> u8;
+}
+
+impl GetBit for u8 {
+    fn get_bit(&self, bit: u8) -> u8 {
+        (self & (1 << bit)) >> bit
+    }
+}
+
 enum LCDRegister {
     LCDC = 0xFF40,
     STAT = 0xff41,
@@ -758,11 +768,13 @@ impl CPU {
         todo!()
     }
 
-    fn render_screen(&self) {
-        todo!()
+    fn render_screen(&self) -> Vec<u32> {
+        let mut buff = vec![0; 160 * 144];
+        // get tile
+        buff
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> Vec<u32> {
         let mut cycles_this_frame = 0;
 
         while cycles_this_frame < MAX_CYCLES as u32 {
@@ -777,7 +789,9 @@ impl CPU {
             // self.do_interupts();
         }
 
-        // self.render_screen();
+        // Temporarily render at the end of every frame for simplicity, implement pixel FIFO later
+        // Move code out of this function and into update_graphics later
+        self.render_screen()
     }
 }
 
@@ -796,5 +810,19 @@ mod tests {
 
         assert_eq!(new_val, 0b1000_0000);
         assert_eq!(c, 1);
+    }
+
+    #[test]
+    fn test_get_bit() {
+        let num: u8 = 0b1100_0010;
+        assert_eq!(num.get_bit(0), 0);
+        assert_eq!(num.get_bit(1), 1);
+        assert_eq!(num.get_bit(2), 0);
+        assert_eq!(num.get_bit(3), 0);
+        assert_eq!(num.get_bit(4), 0);
+        assert_eq!(num.get_bit(5), 0);
+        assert_eq!(num.get_bit(6), 1);
+        assert_eq!(num.get_bit(7), 1);
+
     }
 }
