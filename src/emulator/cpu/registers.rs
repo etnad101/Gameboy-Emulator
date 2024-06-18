@@ -1,4 +1,4 @@
-use super::GetBit;
+use crate::emulator::cpu::GetBit;
 
 pub struct Registers {
     pub a: u8,

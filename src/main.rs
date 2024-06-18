@@ -6,12 +6,13 @@
 * Implement timer
 */
 
-mod cpu;
+mod emulator;
 mod drivers;
+mod utils;
 
 use std::error::Error;
 
-use cpu::CPU;
+use emulator::Emulator;
 use drivers::display::{Display, Color, WHITE};
 
 const WIDTH: usize = 160;
@@ -55,7 +56,7 @@ impl Tile {
 fn main() -> Result<(), Box<dyn Error>> {
     let mut display = Display::new(WIDTH, HEIGHT)?;
 
-    let mut cpu = CPU::new();
+    let mut emulator = Emulator::new();
 
     // Gameboy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     display.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
@@ -63,7 +64,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     while display.is_open() {
         display.clear();
-        cpu.update();
+        emulator.update();
         display.render()?;
     }
 
