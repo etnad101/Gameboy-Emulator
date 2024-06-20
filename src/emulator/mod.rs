@@ -1,7 +1,9 @@
+pub mod rom;
 mod cpu;
 mod memory;
 
-use cpu::CPU;
+use cpu::Cpu;
+use rom::Rom;
 use memory::{LCDRegister, MemoryBus};
 use crate::utils::GetBit;
 
@@ -10,18 +12,21 @@ const MAX_CYCLES: usize = 69905;
 const CYCLES_PER_SCANLINE: usize = 456 / 4;
 
 pub struct Emulator {
-    cpu: CPU,
+    cpu: Cpu,
     memory: MemoryBus,
 }
 
 impl Emulator {
     pub fn new() -> Emulator {
         Emulator {
-            cpu: CPU::new(),
-            memory: MemoryBus::new(MEM_SIZE)
+            cpu: Cpu::new(),
+            memory: MemoryBus::new(MEM_SIZE),
         }
     }
 
+    pub fn load_rom(&mut self, rom: Rom) {
+        self.memory.load_rom(rom.bytes())
+    }
 
     fn update_timers(&self, cycles: u32) {
         todo!()
@@ -29,11 +34,11 @@ impl Emulator {
 
     fn update_graphics(&mut self, cycles: u32) {
         if (cycles as usize % CYCLES_PER_SCANLINE) == 0 {
-            let mut LY = self.memory.read_u8(LCDRegister::LY as u16).wrapping_add(1);
-            if LY == 154 {
-                LY = 0;
+            let mut ly = self.memory.read_u8(LCDRegister::LY as u16).wrapping_add(1);
+            if ly == 154 {
+                ly = 0;
             }
-            self.memory.write_u8(LCDRegister::LY as u16, LY);
+            self.memory.write_u8(LCDRegister::LY as u16, ly);
         }
     }
 

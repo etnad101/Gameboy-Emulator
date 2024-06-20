@@ -4,8 +4,10 @@ mod registers;
 use chrono::{DateTime, Local};
 
 use crate::emulator::memory::MemoryBus;
-use crate::emulator::cpu::opcodes::{AddressingMode, Opcode, Register};
-use crate::emulator::cpu::registers::Registers;
+use crate::emulator::cpu::{
+    opcodes::{AddressingMode, Opcode, Register}, 
+    registers::Registers
+};
 use crate::utils::GetBit;
 use std::{collections::HashMap, fs};
 
@@ -34,7 +36,7 @@ enum DataType {
 }
 
 
-pub struct CPU {
+pub struct Cpu {
     reg: Registers,
     sp: u16,
     pc: u16,
@@ -43,9 +45,9 @@ pub struct CPU {
     debug_log: String,
 }
 
-impl CPU {
-    pub fn new() -> CPU {
-        CPU {
+impl Cpu {
+    pub fn new() -> Cpu {
+        Cpu {
             reg: Registers::new(),
             sp: 0,
             pc: 0,
