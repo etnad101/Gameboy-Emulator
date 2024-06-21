@@ -101,7 +101,7 @@ impl Cpu {
             } else if i % 16 == 0 {
                 self.debug_log.push_str(&format!("|{:#06x}| ", i));
             } else if i % 8 == 0 {
-                self.debug_log.push_str(" ");
+                self.debug_log.push(' ');
             }
 
             let byte: u8 = memory.read_u8(i as u16);
@@ -110,7 +110,7 @@ impl Cpu {
     }
 
     fn log_debug_info(&mut self, asm: String) {
-        self.debug_log.push_str(&format!("{asm}"));
+        self.debug_log.push_str(&asm.to_string());
         self.debug_log
             .push_str(&format!("\nStack Pointer: {:#04x}", self.sp));
         self.debug_log.push_str(&format!(
@@ -134,7 +134,7 @@ impl Cpu {
             let dt = Local::now();
 
             let native_utc = dt.naive_utc();
-            let offset = dt.offset().clone();
+            let offset = *dt.offset();
 
             let now = DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
             let log_name = "crash_log".to_string()

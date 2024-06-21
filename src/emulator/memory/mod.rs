@@ -1,16 +1,4 @@
 
-pub enum LCDRegister {
-    LCDC = 0xFF40,
-    STAT = 0xff41,
-    SCY = 0xff42,
-    SCX = 0xff43,
-    LY = 0xff44,
-    LYC = 0xff45,
-    DMA = 0xff46,
-    BGP = 0xff47,
-    OBP0 = 0xff48,
-    OBP1 = 0xff49,
-}
 
 pub struct MemoryBus {
     size: usize,
@@ -19,7 +7,7 @@ pub struct MemoryBus {
 
 impl MemoryBus {
     pub fn new(size: usize) -> Self {
-        let mut memory: Vec<u8> = vec![0; size + 1];
+        let mut memory: Vec<u8> = vec![0xFF; size + 1];
         let path: &str = "./DMG_ROM.bin";
         let boot_rom: Vec<u8> = std::fs::read(path).unwrap();
 
@@ -48,6 +36,10 @@ impl MemoryBus {
 
     pub fn write_u8(&mut self, addr: u16, value: u8) {
         // TODO: implement Echo RAM and range checks
+        let mut value = value;
+        if addr == 0xFF04 {
+            value = 0;
+        }
         self.bytes[addr as usize] = value;
     }
 

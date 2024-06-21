@@ -5,7 +5,6 @@ use std::error::Error;
 use minifb::{Key, Window, WindowOptions};
 use errors::*;
 
-use crate::Tile;
 
 pub type Color = u32;
 
@@ -89,6 +88,9 @@ impl Display {
     }
 
     pub fn set_buffer(&mut self, buff: Vec<u32>) {
+        if self.buffer.len() != buff.len() {
+            panic!("Buffers must be same size");
+        }
         self.buffer = buff;
     }
 
@@ -97,28 +99,4 @@ impl Display {
     }
 
 
-    pub fn draw_tile(&mut self, tile_x: usize, tile_y: usize, tile: &Tile) -> Result<(), Box<dyn Error>> {
-
-        let tile_data = tile.get_data();
-        let mut pixel_x = tile_x * 8;
-        let mut pixel_y = tile_y * 8;
-        for data in tile_data {
-            let color: Color = match data {
-                0 => 0x00FFFFFF,
-                1 => 0x00BBBBBB,
-                2 => 0x00777777,
-                3 => 0x00000000,
-                _ => panic!("Should not have any other color here"),
-            };
-
-            self.draw_pixel(pixel_x, pixel_y, color)?;
-            pixel_x += 1;
-            if (pixel_x % 8) == 0 {
-                pixel_y += 1;
-                pixel_x = tile_x * 8;
-            }
-        }
-
-        Ok(())
-    }
 }

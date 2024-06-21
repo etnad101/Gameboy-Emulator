@@ -4,8 +4,6 @@ pub struct Rom {
     bytes: Vec<u8>,
     gb_compatible: bool,
 }
-   
-
 
 impl Rom {
     pub fn from(rom_path: &str) -> Result<Rom, Error> {
@@ -18,5 +16,9 @@ impl Rom {
 
     pub fn bytes(&self) -> Vec<u8> {
         self.bytes.clone()
+    }
+
+    pub fn gb_compatible(&self) -> bool {
+        self.gb_compatible
     }
 }

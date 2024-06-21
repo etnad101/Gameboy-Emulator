@@ -1,98 +1,105 @@
 pub mod rom;
 mod cpu;
+mod ppu;
 mod memory;
+mod errors;
 
 use cpu::Cpu;
 use rom::Rom;
-use memory::{LCDRegister, MemoryBus};
-use crate::utils::GetBit;
+use ppu::Ppu;
+use memory::MemoryBus;
+use errors::EmulatorError;
 
+use crate::drivers::display::Color;
+
+const CPU_FREQ: usize = 4_194_300; // Acutal frequency is 4,194,304 hz
 const MEM_SIZE: usize = 0xFFFF;
-const MAX_CYCLES: usize = 69905;
-const CYCLES_PER_SCANLINE: usize = 456 / 4;
+const MAX_CYCLES_PER_FRAME: usize = CPU_FREQ / 60; // Divide frequency by frame rate
+const DIV_FREQ: usize = 16380; // Actual rate is 16,384 hz
+const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
+
+
+pub enum LCDRegister {
+    LCDC = 0xFF40,
+    STAT = 0xff41,
+    SCY = 0xff42,
+    SCX = 0xff43,
+    LY = 0xff44,
+    LYC = 0xff45,
+    DMA = 0xff46,
+    BGP = 0xff47,
+    OBP0 = 0xff48,
+    OBP1 = 0xff49,
+}
+
+enum Timer {
+    DIV = 0xFF04,
+    TIMA = 0xFF05,
+    TMA = 0xFF06,
+    TAC = 0xFF07,
+}
+
 
 pub struct Emulator {
     cpu: Cpu,
+    ppu: Ppu,
     memory: MemoryBus,
+    timer_cycles: u32,
 }
 
 impl Emulator {
     pub fn new() -> Emulator {
         Emulator {
             cpu: Cpu::new(),
+            ppu: Ppu::new(),
             memory: MemoryBus::new(MEM_SIZE),
+            timer_cycles: 0,
         }
     }
 
-    pub fn load_rom(&mut self, rom: Rom) {
-        self.memory.load_rom(rom.bytes())
-    }
-
-    fn update_timers(&self, cycles: u32) {
-        todo!()
-    }
-
-    fn update_graphics(&mut self, cycles: u32) {
-        if (cycles as usize % CYCLES_PER_SCANLINE) == 0 {
-            let mut ly = self.memory.read_u8(LCDRegister::LY as u16).wrapping_add(1);
-            if ly == 154 {
-                ly = 0;
-            }
-            self.memory.write_u8(LCDRegister::LY as u16, ly);
+    pub fn load_rom(&mut self, rom: Rom) -> Result<(), EmulatorError>{
+        if rom.gb_compatible() {
+            self.memory.load_rom(rom.bytes());
+            return Ok(())
+        } else {
+            return Err(EmulatorError::IncompatableRom)
         }
     }
+
+    fn update_timers(&mut self, cycles: u32) {
+        self.timer_cycles += cycles;
+        if self.timer_cycles as usize >= DIV_UPDATE_FREQ {
+            let addr = Timer::DIV as u16;
+            let div = self.memory.read_u8(addr as u16);
+            self.memory.write_u8(addr, div);
+            self.timer_cycles = 0;
+        }
+    }
+
 
     fn do_interupts(&self) {
         todo!()
     }
 
-    fn render_screen(&self) -> Vec<u32> {
-        let mut buff = vec![0; 160 * 144];
 
-        // get tile
-        let fetcher_x = 0;
-        let fetcher_y = 0;
-        let lcdc = self.memory.read_u8(LCDRegister::LCDC as u16);
-        // change false to chekc if x coordinate of current scanline is in window
-        let tilemap_base = if (lcdc.get_bit(3) == 1) && (false) {
-            0x9c00 
-        } else if (lcdc.get_bit(6) == 1) && (false) {
-            0x9c00 
-        } else {
-            0x9800 
-        };
-
-        let tilemap_addr = tilemap_base + fetcher_x;
-        let tile_offset = self.memory.read_u8(tilemap_addr) as u16;
-
-        let tile_addr = if lcdc.get_bit(4) == 1 {
-           0x8000 + (tile_offset * 16)
-        } else {
-            let offset = (tile_offset as i8) as i32 * 16;
-            (0x9000 + offset) as u16
-        };
-
-        buff
-    }
-
-    pub fn update(&mut self) -> Vec<u32> {
+    pub fn update(&mut self) -> Vec<Color> {
         let mut cycles_this_frame = 0;
 
-        while cycles_this_frame < MAX_CYCLES as u32 {
+        while cycles_this_frame < MAX_CYCLES_PER_FRAME as u32 {
             let cycles = self.cpu.execute_next_opcode(&mut self.memory);
             
             cycles_this_frame += cycles;
 
             // self.update_timers(cycles);
 
-            self.update_graphics(cycles_this_frame);
+            self.ppu.update_graphics(&mut self.memory, cycles_this_frame);
 
             // self.do_interupts();
         }
 
         // Temporarily render at the end of every frame for simplicity, implement pixel FIFO later
         // Move code out of this function and into update_graphics later
-        self.render_screen()
+        self.ppu.render_screen(&mut self.memory)
     }
     
 }
