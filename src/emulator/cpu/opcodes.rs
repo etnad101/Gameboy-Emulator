@@ -95,8 +95,9 @@ impl Opcode {
             Opcode::new(0xe2, "LD [C], A".to_string(), 1, 2, AddressingMode::IoAdressOffset, AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0xea, "LD [a16], A".to_string(), 3, 4, AddressingMode::AddressU16, AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0xf0, "LDH A, [a8]".to_string(), 2, 3, AddressingMode::ImmediateRegister(Register::A), AddressingMode::AddressHRAM),
-            // Arithmatic Instructions
+            // Arithmetic Instructions
             Opcode::new(0x90, "SUB A, B".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::A), AddressingMode::ImmediateRegister(Register::B)),
+            Opcode::new(0xbe, "CP A, [HL]".to_string(), 1, 2, AddressingMode::ImmediateRegister(Register::A), AddressingMode::AddressRegister(Register::HL)),
             Opcode::new(0xfe, "CP A, n8".to_string(), 2, 2, AddressingMode::ImmediateRegister(Register::A), AddressingMode::ImmediateU8),
             // Logic and Bit Instructions
             Opcode::new(0x17, "RLA".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::A), AddressingMode::None),

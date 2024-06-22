@@ -22,11 +22,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut display = Display::new(SCREEN_WIDTH, SCREEN_HEIGHT)?;
 
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
-    let tetris = Rom::from("./roms/games/Tetris (World) (Rev A).gb")?;
 
     let mut emulator = Emulator::new();
 
-    emulator.load_rom(tetris);
+    emulator.load_rom(test_rom)?;
 
     // Gameboy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     display.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));

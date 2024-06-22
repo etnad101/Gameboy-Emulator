@@ -18,7 +18,6 @@ const MAX_CYCLES_PER_FRAME: usize = CPU_FREQ / 60; // Divide frequency by frame 
 const DIV_FREQ: usize = 16380; // Actual rate is 16,384 hz
 const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
 
-
 pub enum LCDRegister {
     LCDC = 0xFF40,
     STAT = 0xff41,
@@ -45,6 +44,7 @@ pub struct Emulator {
     ppu: Ppu,
     memory: MemoryBus,
     timer_cycles: u32,
+    frames: usize,
 }
 
 impl Emulator {
@@ -54,6 +54,7 @@ impl Emulator {
             ppu: Ppu::new(),
             memory: MemoryBus::new(MEM_SIZE),
             timer_cycles: 0,
+            frames: 0,
         }
     }
 
@@ -83,6 +84,10 @@ impl Emulator {
 
 
     pub fn update(&mut self) -> Vec<Color> {
+        if self.frames > 120 {
+            self.cpu.crash(&self.memory, "Intentional crash after 2 seconds".to_string());
+        }
+        self.frames += 1;
         let mut cycles_this_frame = 0;
 
         while cycles_this_frame < MAX_CYCLES_PER_FRAME as u32 {

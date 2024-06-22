@@ -11,7 +11,12 @@ use crate::emulator::cpu::{
 use crate::utils::GetBit;
 use std::{collections::HashMap, fs};
 
-const DEBUG: bool = true;
+const DEBUG_MODE: Option<DebugMode> = Some(DebugMode::Memory);
+
+enum DebugMode {
+    Memory,
+    Instructions,
+}
 
 enum JumpCondition {
     Z,
@@ -110,41 +115,50 @@ impl Cpu {
     }
 
     fn log_debug_info(&mut self, asm: String) {
-        self.debug_log.push_str(&asm.to_string());
-        self.debug_log
-            .push_str(&format!("\nStack Pointer: {:#04x}", self.sp));
-        self.debug_log.push_str(&format!(
-            "\nA: {:#04x}, F: {:#010b}",
-            self.reg.a, self.reg.f
-        ));
-        self.debug_log
-            .push_str(&format!("\nB: {:#04x}, C: {:#04x}", self.reg.b, self.reg.c));
-        self.debug_log
-            .push_str(&format!("\nD: {:#04x}, E: {:#04x}", self.reg.d, self.reg.e));
-        self.debug_log
-            .push_str(&format!("\nH: {:#04x}, L: {:#04x}", self.reg.h, self.reg.l));
-        self.debug_log.push_str("\n");
-        self.debug_log
-            .push_str(&format!("\nProgram Counter: {:#04x}; ", self.pc));
+        match DEBUG_MODE {
+            Some(DebugMode::Instructions) => {
+                self.debug_log.push_str(&asm.to_string());
+                self.debug_log
+                    .push_str(&format!("\nStack Pointer: {:#04x}", self.sp));
+                self.debug_log.push_str(&format!(
+                    "\nA: {:#04x}, F: {:#010b}",
+                    self.reg.a, self.reg.f
+                ));
+                self.debug_log
+                    .push_str(&format!("\nB: {:#04x}, C: {:#04x}", self.reg.b, self.reg.c));
+                self.debug_log
+                    .push_str(&format!("\nD: {:#04x}, E: {:#04x}", self.reg.d, self.reg.e));
+                self.debug_log
+                    .push_str(&format!("\nH: {:#04x}, L: {:#04x}", self.reg.h, self.reg.l));
+                self.debug_log.push_str("\n");
+                self.debug_log
+                    .push_str(&format!("\nProgram Counter: {:#04x}; ", self.pc));
+            }
+            _ => (),
+        }
     }
 
     pub fn crash(&mut self, memory: &MemoryBus, msg: String) -> ! {
-        if DEBUG {
-            self.dump_mem(memory);
-            let dt = Local::now();
+        println!("ERROR: Starting crash sequence...");
+        match DEBUG_MODE {
+            Some(_) => {
+                self.dump_mem(memory);
+                let dt = Local::now();
 
-            let native_utc = dt.naive_utc();
-            let offset = *dt.offset();
+                let native_utc = dt.naive_utc();
+                let offset = *dt.offset();
 
-            let now = DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
-            let log_name = "crash_log".to_string()
-                + &now.replace(" ", "_").replace(":", "-").replace(".", "_");
-            let path = "./logs/".to_string() + &log_name;
+                let now = DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
+                let log_name = "crash_log".to_string()
+                    + &now.replace(" ", "_").replace(":", "-").replace(".", "_");
+                let path = "./logs/".to_string() + &log_name;
 
-            fs::File::create(path.clone()).expect("unable to create file");
-            fs::write(path, self.debug_log.clone()).expect("unable to write to file");
+                fs::File::create(path.clone()).expect("unable to create file");
+                fs::write(path, self.debug_log.clone()).expect("unable to write to file");
+            }
+            None => (),
         }
-        panic!("CRASHING: {}", String::from(msg));
+        panic!("CRASH: {}", String::from(msg));
     }
 
     // Utility methods
@@ -672,7 +686,7 @@ impl Cpu {
                 }
                 0x90 => self.sub_a(memory, &rhs, true),
                 0xaf => self.xor_with_a(memory, &rhs),
-                0xfe => self.sub_a(memory, &rhs, false),
+                0xbe | 0xfe => self.sub_a(memory, &rhs, false),
                 _ => {
                     self.crash(memory, format!("Unknown opcode: {:#04x}", code));
                 }
@@ -683,9 +697,7 @@ impl Cpu {
             self.pc += opcode_bytes;
         }
 
-        if DEBUG {
-            self.log_debug_info(opcode_asm);
-        }
+        self.log_debug_info(opcode_asm);
 
         opcode_cycles + extra_cycles
     }

@@ -1,5 +1,3 @@
-
-
 pub struct MemoryBus {
     size: usize,
     bytes: Vec<u8>,
@@ -18,12 +16,14 @@ impl MemoryBus {
 
     pub fn load_rom(&mut self, rom: Vec<u8>) {
         // Temporary size limit until I setup MBCs, so I can load a rom to get the boot screen
-        let len = if rom.len() > 0x200 {
+        let mut len = if rom.len() > 0x200 {
             0x200
         } else {
             rom.len()
         };
-        self.bytes[0x100..len + 0x100].copy_from_slice(&rom[0..len]);
+        len += 0x100;
+
+        self.bytes[0x100..len].copy_from_slice(&rom[0x100..len]);
     }
 
     pub fn get_size(&self) -> usize {
