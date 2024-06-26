@@ -5,15 +5,15 @@
 * Implement timer
 */
 
-mod emulator;
 mod drivers;
+mod emulator;
 mod utils;
 
 use std::error::Error;
 
-use emulator::Emulator;
-use emulator::rom::Rom;
 use drivers::display::{Display, WHITE};
+use emulator::rom::Rom;
+use emulator::Emulator;
 
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
@@ -24,6 +24,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
     let mut emulator = Emulator::new();
+    emulator.run_opcode_tests()?;
+    panic!("Panic on purpose after opcode test");
 
     emulator.load_rom(test_rom)?;
 
@@ -32,7 +34,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     display.set_background(WHITE);
 
     while display.is_open() {
-        let frame = emulator.update();
+        let frame = emulator.update()?;
 
         display.clear();
         display.set_buffer(frame);
