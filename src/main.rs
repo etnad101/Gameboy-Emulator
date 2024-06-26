@@ -25,8 +25,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
     let mut emulator = Emulator::new();
-    emulator.run_opcode_tests()?;
-    panic!("Panic on purpose after opcode test");
 
     emulator.load_rom(test_rom)?;
 
@@ -43,4 +41,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     Ok(())
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_opcodes() {
+        let mut emulator = Emulator::new();
+        assert!(emulator._run_opcode_tests().unwrap());
+        
+    }
 }

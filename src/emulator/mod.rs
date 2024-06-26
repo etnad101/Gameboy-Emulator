@@ -91,8 +91,8 @@ impl Emulator {
         if self.frames > 120 {
             self.cpu.crash(
                 &self.memory,
-                "Intentional crash after 2 seconds".to_string(),
-            );
+                CpuError::OpcodeError("Intentional crash after 2 seconds".to_string()),
+            )?
         }
         self.frames += 1;
         let mut cycles_this_frame = 0;
@@ -115,83 +115,84 @@ impl Emulator {
         Ok(self.ppu.render_screen(&mut self.memory))
     }
 
-    fn load_state(&mut self, state: State) {
-        /*
-        println!(
-            "Initial: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#04x}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
-            state.a,
-            state.b,
-            state.c,
-            state.d,
-            state.e,
-            state.f,
-            state.h,
-            state.l,
-            state.sp,
-            state.pc - 1
-        );
-        */
-        self.cpu.load_state(&state);
+    fn load_state(&mut self, test: &TestData) {
+        self.cpu.load_state(&test.initial);
         self.memory.clear();
-        for mem_state in state.ram {
+        for mem_state in test.initial.ram.to_owned() {
             let addr = mem_state[0];
             let value = mem_state[1] as u8;
             self.memory.write_u8(addr, value)
         }
     }
 
-    fn check_state(&self, state: State) -> bool {
+    fn check_state(&self, test: &TestData) -> bool {
         let (a, b, c, d, e, f, h, l, sp, pc) = self.cpu.get_state();
-        /*
-        println!(
-            "Expexted: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#04x}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
-            state.a,
-            state.b,
-            state.c,
-            state.d,
-            state.e,
-            state.f,
-            state.h,
-            state.l,
-            state.sp,
-            state.pc - 1
-        );
-        println!(
-            "Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#04x}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
-            a, b, c, d, e, f, h, l, sp, pc
-        );
-        */
-        let equal = a == state.a
-            && b == state.b
-            && c == state.c
-            && d == state.d
-            && e == state.e
-            && f == state.f
-            && h == state.h
-            && l == state.l
-            && sp == state.sp
-            && pc == state.pc - 1;
+        let equal = a == test.after.a
+            && b == test.after.b
+            && c == test.after.c
+            && d == test.after.d
+            && e == test.after.e
+            && f == test.after.f
+            && h == test.after.h
+            && l == test.after.l
+            && sp == test.after.sp
+            && pc == test.after.pc - 1;
 
-        for mem_state in state.ram {
+        for mem_state in test.after.ram.to_owned() {
             let addr = mem_state[0];
             let correct_value = mem_state[1] as u8;
             let mem_value = self.memory.read_u8(addr);
 
             if mem_value != correct_value {
-                println!("incorrect memory value");
+                // TODO: Print out where memory values are incorrect 
+                print!("incorrect memory value");
                 return false;
             }
+        }
+
+        if !equal {
+            println!(
+                "Initial: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                test.initial.a,
+                test.initial.b,
+                test.initial.c,
+                test.initial.d,
+                test.initial.e,
+                test.initial.f,
+                test.initial.h,
+                test.initial.l,
+                test.initial.sp,
+                test.initial.pc - 1
+            );
+            println!(
+                "Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                a, b, c, d, e, f, h, l, sp, pc
+            );
+            println!(
+                "Expexted: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                test.after.a,
+                test.after.b,
+                test.after.c,
+                test.after.d,
+                test.after.e,
+                test.after.f,
+                test.after.h,
+                test.after.l,
+                test.after.sp,
+                test.after.pc - 1
+            );
         }
         equal
     }
 
     // Test Code
-    pub fn run_opcode_tests(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn _run_opcode_tests(&mut self) -> Result<bool, Box<dyn Error>> {
+        let mut all_passed = true;
         let test_dir = fs::read_dir("./tests")?;
         for file in test_dir {
             let path = file?.path();
             // TODO: add check to make sure file is valid test
-            
+
             let data = fs::read_to_string(path).unwrap();
 
             let test_data: Vec<TestData> = serde_json::from_str(&data).unwrap();
@@ -201,14 +202,11 @@ impl Emulator {
             let mut current_test = 0;
             let mut passed = 0;
             println!("----------");
+            println!("Testing {}", name);
             for test in test_data {
                 current_test += 1;
-                print!(
-                    "\rTesting {} ({:>3}/{}) ",
-                    name, current_test, total_tests
-                );
                 std::io::stdout().flush().unwrap();
-                self.load_state(test.initial);
+                self.load_state(&test);
                 match self.cpu.execute_next_opcode(&mut self.memory) {
                     Ok(_) => (),
                     Err(e) => {
@@ -217,13 +215,16 @@ impl Emulator {
                     }
                 }
 
-                if self.check_state(test.after) {
+                if self.check_state(&test){
                     passed += 1;
+                } else {
+                    all_passed = false;
+                    print!(" -> test {}\n", current_test);
+                    std::io::stdout().flush()?;
                 }
-
             }
-            println!("\n{}/{} tests passed", passed, total_tests);
+            println!("\n{}/{} tests passed\n", passed, total_tests);
         }
-        Ok(())
+        Ok(all_passed)
     }
 }
