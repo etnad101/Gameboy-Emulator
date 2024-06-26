@@ -2,9 +2,8 @@ mod errors;
 
 use std::error::Error;
 
-use minifb::{Key, Window, WindowOptions};
 use errors::*;
-
+use minifb::{Key, Window, WindowOptions};
 
 pub type Color = u32;
 
@@ -24,7 +23,7 @@ pub struct Display {
     background: Color,
 }
 
-#[allow(dead_code)] 
+#[allow(dead_code)]
 impl Display {
     pub fn new(width: usize, height: usize) -> Result<Self, minifb::Error> {
         let buffer: Vec<u32> = vec![0; width * height];
@@ -59,24 +58,29 @@ impl Display {
     }
 
     pub fn limit_frame_rate(&mut self, rate: Option<std::time::Duration>) {
-       self.window.limit_update_rate(rate); 
+        self.window.limit_update_rate(rate);
     }
 
     pub fn is_open(&self) -> bool {
         self.window.is_open() && !self.window.is_key_down(Key::Escape)
     }
 
-    pub fn draw_pixel(&mut self, x: usize, y: usize, color: Color) -> Result<(), DrawOutOfBoundsError> {
+    pub fn draw_pixel(
+        &mut self,
+        x: usize,
+        y: usize,
+        color: Color,
+    ) -> Result<(), DrawOutOfBoundsError> {
         if x > self.width {
-            return Err(DrawOutOfBoundsError::X(x))
+            return Err(DrawOutOfBoundsError::X(x));
         }
 
         if y > self.height {
-            return Err(DrawOutOfBoundsError::Y(y))
+            return Err(DrawOutOfBoundsError::Y(y));
         }
 
         let index = (y * self.width) + x;
-        self.buffer[index] = color; 
+        self.buffer[index] = color;
 
         Ok(())
     }
@@ -97,6 +101,4 @@ impl Display {
     pub fn set_background(&mut self, bg: Color) {
         self.background = bg;
     }
-
-
 }

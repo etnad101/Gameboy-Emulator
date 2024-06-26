@@ -1,4 +1,3 @@
-
 pub trait GetBit {
     fn get_bit(&self, bit: u8) -> u8;
 }

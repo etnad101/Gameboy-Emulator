@@ -1,10 +1,10 @@
 use std::error::Error;
 
-use crate::drivers::display::Color;
-use crate::{drivers::display::WHITE, utils::GetBit};
-use crate::{SCREEN_WIDTH, SCREEN_HEIGHT};
 use super::memory::MemoryBus;
 use super::LCDRegister;
+use crate::drivers::display::Color;
+use crate::{drivers::display::WHITE, utils::GetBit};
+use crate::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const CYCLES_PER_SCANLINE: usize = 456 / 4;
 
@@ -33,9 +33,7 @@ impl Tile {
             i += 2;
         }
 
-        Tile {
-            data: tile,
-        }
+        Tile { data: tile }
     }
 
     pub fn get_data(&self) -> [u8; 64] {
@@ -43,17 +41,16 @@ impl Tile {
     }
 }
 
-pub struct Ppu { 
+pub struct Ppu {
     buffer: Vec<Color>,
 }
 
 impl Ppu {
     pub fn new() -> Ppu {
-        Ppu { 
-            buffer: vec![WHITE; 256 * 256]
+        Ppu {
+            buffer: vec![WHITE; 256 * 256],
         }
     }
-
 
     fn parse_tile_data(data: Vec<u8>) -> Vec<Tile> {
         let mut tiles: Vec<Tile> = Vec::new();
@@ -68,7 +65,7 @@ impl Ppu {
 
         tiles
     }
-    
+
     pub fn draw_pixel(&mut self, x: usize, y: usize, color: Color) {
         if x > SCREEN_WIDTH {
             panic!("ERROR::PPU attempting to draw outside of buffer (width)")
@@ -79,11 +76,15 @@ impl Ppu {
         }
 
         let index = (y * SCREEN_WIDTH) + x;
-        self.buffer[index] = color; 
+        self.buffer[index] = color;
     }
-    
-    pub fn draw_tile(&mut self, tile_x: usize, tile_y: usize, tile: &Tile) -> Result<(), Box<dyn Error>> {
 
+    pub fn draw_tile(
+        &mut self,
+        tile_x: usize,
+        tile_y: usize,
+        tile: &Tile,
+    ) -> Result<(), Box<dyn Error>> {
         let tile_data = tile.get_data();
         let mut pixel_x = tile_x * 8;
         let mut pixel_y = tile_y * 8;
@@ -117,7 +118,6 @@ impl Ppu {
         }
     }
 
-
     pub fn render_screen(&self, memory: &mut MemoryBus) -> Vec<u32> {
         let mut buff = vec![WHITE; 160 * 144];
 
@@ -127,25 +127,24 @@ impl Ppu {
         let lcdc = memory.read_u8(LCDRegister::LCDC as u16);
         // change false to chekc if x coordinate of current scanline is in window
         let tilemap_base = if (lcdc.get_bit(3) == 1) && (false) {
-            0x9c00 
+            0x9c00
         } else if (lcdc.get_bit(6) == 1) && (false) {
-            0x9c00 
+            0x9c00
         } else {
-            0x9800 
+            0x9800
         };
 
         let tilemap_addr = tilemap_base + fetcher_x;
         let tile_offset = memory.read_u8(tilemap_addr) as u16;
 
         let tile_addr = if lcdc.get_bit(4) == 1 {
-           0x8000 + (tile_offset * 16)
+            0x8000 + (tile_offset * 16)
         } else {
             let offset = (tile_offset as i8) as i32 * 16;
             (0x9000 + offset) as u16
         };
 
         // additional calculation needed to find the 160x144 area from the 256x256 tile map
-        
 
         buff
     }

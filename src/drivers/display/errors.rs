@@ -3,7 +3,7 @@ use core::fmt;
 #[derive(Debug)]
 pub enum DrawOutOfBoundsError {
     X(usize),
-    Y(usize), 
+    Y(usize),
 }
 
 impl fmt::Display for DrawOutOfBoundsError {

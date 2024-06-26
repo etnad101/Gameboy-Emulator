@@ -11,7 +11,10 @@ impl Rom {
 
         let gb_compatible = bytes[0x143] == 0x80;
 
-        Ok(Rom { bytes, gb_compatible })
+        Ok(Rom {
+            bytes,
+            gb_compatible,
+        })
     }
 
     pub fn bytes(&self) -> Vec<u8> {
