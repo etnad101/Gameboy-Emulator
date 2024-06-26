@@ -771,6 +771,7 @@ impl Cpu {
             };
         } else {
             match code {
+                0x00 => (),
                 0x04 | 0x05 | 0x0d | 0x15 | 0x1d | 0x3d => self.decrement_u8(memory, &lhs)?,
                 0x0c | 0x24 => self.increment_u8(memory, &lhs)?,
                 0x13 | 0x23 => self.increment_u16(memory, &lhs)?,

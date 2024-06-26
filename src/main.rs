@@ -1,5 +1,6 @@
 /*
 * TODO
+* Maybe change pc to work like how json tests describe
 * Create better debugger
 * Need support for palettes, tile data, background tile maps, vertical scrolling (register 0xFF42), and register @ 0xFF44
 * Implement timer

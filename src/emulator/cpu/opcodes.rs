@@ -62,6 +62,7 @@ impl Opcode {
     #[rustfmt::skip]
     pub fn generate_normal_opcode_map() -> HashMap<u8, Opcode> {
         let opcodes: Vec<Opcode> = vec![
+            Opcode::new(0x00, "NOP".to_string(), 1, 1, AddressingMode::None, AddressingMode::None),
             // Inc/Dec Instructions
             Opcode::new(0x04, "INC B".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::B), AddressingMode::None),
             Opcode::new(0x05, "DEC B".to_string(), 1, 1, AddressingMode::ImmediateRegister(Register::B), AddressingMode::None),

@@ -151,7 +151,7 @@ impl Emulator {
             state.h,
             state.l,
             state.sp,
-            state.pc
+            state.pc - 1
         );
         println!(
             "Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#04x}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
@@ -166,7 +166,7 @@ impl Emulator {
             && h == state.h
             && l == state.l
             && sp == state.sp
-            && pc == state.pc;
+            && pc == state.pc - 1;
 
         for mem_state in state.ram {
             let addr = mem_state[0];
