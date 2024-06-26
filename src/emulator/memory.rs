@@ -1,3 +1,7 @@
+use std::{error::Error, fs};
+
+use super::errors::EmulatorError;
+
 pub struct MemoryBus {
     size: usize,
     bytes: Vec<u8>,
@@ -6,24 +10,43 @@ pub struct MemoryBus {
 impl MemoryBus {
     pub fn new(size: usize) -> Self {
         let mut memory: Vec<u8> = vec![0xFF; size + 1];
-        let path: &str = "./DMG_ROM.bin";
-        let boot_rom: Vec<u8> = std::fs::read(path).unwrap();
 
-        memory[0..boot_rom.len()].copy_from_slice(&boot_rom);
-        
-        MemoryBus { size, bytes: memory }
+        MemoryBus {
+            size,
+            bytes: memory,
+        }
     }
 
-    pub fn load_rom(&mut self, rom: Vec<u8>) {
-        // Temporary size limit until I setup MBCs, so I can load a rom to get the boot screen
-        let mut len = if rom.len() > 0x200 {
-            0x200
+    pub fn load_rom(
+        &mut self,
+        boot_rom: bool,
+        p_rom: Option<Vec<u8>>,
+    ) -> Result<(), Box<dyn Error>> {
+        let rom: Vec<u8> = if boot_rom {
+            let path = "./DMG_ROM.bin";
+            fs::read(path)?
         } else {
-            rom.len()
+            match p_rom {
+                Some(rom) => rom,
+                None => return Err(Box::new(EmulatorError::NoPrgmRom)),
+            }
         };
-        len += 0x100;
 
-        self.bytes[0x100..len].copy_from_slice(&rom[0x100..len]);
+        // Temporary size limit until I setup MBCs, so I can load a rom to get the boot screen
+        let mut len = if rom.len() > 0x200 { 0x200 } else { rom.len() };
+
+        let mut start_addr: usize = 0;
+        if !boot_rom {
+            start_addr = 0x100;
+            len += 0x100;
+        }
+
+        self.bytes[start_addr..len].copy_from_slice(&rom[start_addr..len]);
+        Ok(())
+    }
+
+    pub fn clear(&mut self) {
+        self.bytes = vec![0xFF; self.size + 1];
     }
 
     pub fn get_size(&self) -> usize {
