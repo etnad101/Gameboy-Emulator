@@ -16,7 +16,7 @@ use super::{
     test::{State, TestData},
 };
 
-const DEBUG_MODE: Option<DebugMode> = Some(DebugMode::Memory);
+const DEBUG_MODE: Option<DebugMode> = None;
 
 enum DebugMode {
     Memory,
@@ -142,7 +142,7 @@ impl Cpu {
         }
     }
 
-    pub fn crash(&mut self, memory: &MemoryBus, msg: String) -> Result<(), CpuError> {
+    pub fn crash(&mut self, memory: &MemoryBus, error: CpuError) -> Result<(), CpuError> {
         match DEBUG_MODE {
             Some(_) => {
                 self.dump_mem(memory);
@@ -162,7 +162,7 @@ impl Cpu {
             }
             None => (),
         }
-        Err(CpuError::OpcodeError(msg))
+        Err(error)
     }
 
     // Utility methods
@@ -244,14 +244,14 @@ impl Cpu {
                     Register::E => self.reg.e = value,
                     Register::H => self.reg.h = value,
                     Register::L => self.reg.l = value,
-                    _ => self.crash(memory, "Must store u8 value in u8 register".to_string())?,
+                    _ => self.crash(memory, CpuError::OpcodeError("Must store u8 value in u8 register".to_string()))?,
                 },
                 DataType::ValueU16(value) => match reg {
                     Register::BC => self.reg.set_bc(value),
                     Register::DE => self.reg.set_de(value),
                     Register::HL => self.reg.set_hl(value),
                     Register::SP => self.sp = value,
-                    _ => self.crash(memory, "Must store u16 value in u16 register".to_string())?,
+                    _ => self.crash(memory, CpuError::OpcodeError("Must store u16 value in u16 register".to_string()))?,
                 },
                 DataType::Address(addr) => {
                     let value = memory.read_u8(addr);
@@ -264,11 +264,11 @@ impl Cpu {
                         Register::H => self.reg.h = value,
                         Register::L => self.reg.l = value,
                         _ => {
-                            self.crash(memory, "Must store u8 value in u8 register".to_string())?
+                            self.crash(memory, CpuError::OpcodeError("Must store u8 value in u8 register".to_string()))?
                         }
                     }
                 }
-                _ => self.crash(memory, "Should not have None here".to_string())?,
+                _ => self.crash(memory, CpuError::OpcodeError("Should not have None here".to_string()))?,
             },
             AddressingMode::AddressRegister(reg) => {
                 let addr = match reg {
@@ -278,7 +278,7 @@ impl Cpu {
                     _ => {
                         return self.crash(
                             memory,
-                            "Address can't come from 8 bit registere".to_string(),
+                            CpuError::OpcodeError("Address can't come from 8 bit registere".to_string()),
                         )
                     }
                 };
@@ -287,7 +287,7 @@ impl Cpu {
                     DataType::ValueU8(value) => memory.write_u8(addr, value),
                     _ => self.crash(
                         memory,
-                        "Should only write u8 to mem / not implemented - check docs".to_string(),
+                        CpuError::OpcodeError("Should only write u8 to mem / not implemented - check docs".to_string()),
                     )?,
                 }
             }
@@ -296,15 +296,15 @@ impl Cpu {
             | AddressingMode::AddressHRAM => {
                 let addr: u16 = match self.get_data(memory, lhs) {
                     DataType::Address(addr) => addr,
-                    _ => return self.crash(memory, "Should only have address here".to_string()),
+                    _ => return self.crash(memory, CpuError::OpcodeError("Should only have address here".to_string())),
                 };
 
                 match data {
                     DataType::ValueU8(value) => memory.write_u8(addr, value),
-                    _ => self.crash(memory, "Should only have u8 value here".to_string())?,
+                    _ => self.crash(memory, CpuError::OpcodeError("Should only have u8 value here".to_string()))?,
                 }
             }
-            _ => self.crash(memory, "Should only be an address or value".to_string())?,
+            _ => self.crash(memory, CpuError::OpcodeError("Should only be an address or value".to_string()))?,
         }
 
         match modifier {
@@ -348,7 +348,7 @@ impl Cpu {
     ) -> Result<(), CpuError> {
         let (sum, overflow) = match self.get_data(memory, addressing_mode) {
             DataType::ValueU8(val) => self.carry_track_add_u8(val, 1),
-            _ => return self.crash(memory, "Expected u8 here".to_string()),
+            _ => return self.crash(memory, CpuError::OpcodeError("Expected u8 here".to_string())),
         };
 
         match addressing_mode {
@@ -360,13 +360,13 @@ impl Cpu {
                 Register::E => self.reg.e = sum,
                 Register::H => self.reg.h = sum,
                 Register::L => self.reg.l = sum,
-                _ => self.crash(memory, "expected 8 bit register".to_string())?,
+                _ => self.crash(memory, CpuError::OpcodeError("expected 8 bit register".to_string()))?,
             },
             AddressingMode::AddressRegister(reg) => match reg {
                 Register::HL => memory.write_u8(self.reg.hl(), sum),
-                _ => self.crash(memory, "Should only have [HL] here".to_string())?,
+                _ => self.crash(memory, CpuError::OpcodeError("Should only have [HL] here".to_string()))?,
             },
-            _ => self.crash(memory, "Only use this fucntion for u8 values".to_string())?,
+            _ => self.crash(memory, CpuError::OpcodeError("Only use this fucntion for u8 values".to_string()))?,
         };
 
         if sum == 0 {
@@ -374,6 +374,8 @@ impl Cpu {
         } else {
             self.reg.clear_z_flag()
         }
+
+        self.reg.clear_n_flag();
 
         if overflow[3] {
             self.reg.set_h_flag()
@@ -391,7 +393,7 @@ impl Cpu {
     ) -> Result<(), CpuError> {
         let sum = match self.get_data(memory, addressing_mode) {
             DataType::ValueU16(val) => val.wrapping_add(1),
-            _ => return self.crash(memory, "Expected u16 here".to_string()),
+            _ => return self.crash(memory, CpuError::OpcodeError("Expected u16 here".to_string())),
         };
 
         match addressing_mode {
@@ -399,9 +401,9 @@ impl Cpu {
                 Register::BC => self.reg.set_bc(sum),
                 Register::DE => self.reg.set_de(sum),
                 Register::HL => self.reg.set_hl(sum),
-                _ => self.crash(memory, "Expected 16 bit register".to_string())?,
+                _ => self.crash(memory, CpuError::OpcodeError("Expected 16 bit register".to_string()))?,
             },
-            _ => self.crash(memory, "Expected 16 bit register".to_string())?,
+            _ => self.crash(memory, CpuError::OpcodeError("Expected 16 bit register".to_string()))?,
         }
 
         Ok(())
@@ -414,7 +416,7 @@ impl Cpu {
     ) -> Result<(), CpuError> {
         let (diff, borrow) = match self.get_data(memory, addressing_mode) {
             DataType::ValueU8(val) => self.borrow_track_sub_u8(val, 1),
-            _ => return self.crash(memory, "Expected u8 here".to_string()),
+            _ => return self.crash(memory, CpuError::OpcodeError("Expected u8 here".to_string())),
         };
 
         match addressing_mode {
@@ -431,9 +433,9 @@ impl Cpu {
 
             AddressingMode::AddressRegister(reg) => match reg {
                 Register::HL => memory.write_u8(self.reg.hl(), diff),
-                _ => self.crash(memory, "Should only have [HL] here".to_string())?,
+                _ => self.crash(memory, CpuError::OpcodeError("Should only have [HL] here".to_string()))?,
             },
-            _ => self.crash(memory, "Only use this fucntion for u8 values".to_string())?,
+            _ => self.crash(memory, CpuError::OpcodeError("Only use this fucntion for u8 values".to_string()))?,
         }
 
         if diff == 0 {
@@ -461,7 +463,7 @@ impl Cpu {
             _ => {
                 return self.crash(
                     memory,
-                    "Should only xor with 8 bit register or HL address".to_string(),
+                    CpuError::OpcodeError("Should only xor with 8 bit register or HL address".to_string()),
                 )
             }
         };
@@ -481,7 +483,7 @@ impl Cpu {
     ) -> Result<u32, CpuError> {
         let offset = match self.get_data(memory, addressing_mode) {
             DataType::ValueI8(val) => val,
-            _ => match self.crash(memory, "Should only be i8".to_string()) {
+            _ => match self.crash(memory, CpuError::OpcodeError("Should only be i8".to_string())) {
                 Ok(_) => panic!("This panic should not be possible to reach, if it is something went very wrong"),
                 Err(e) => return Err(e)
             },
@@ -534,7 +536,7 @@ impl Cpu {
     ) -> Result<(), CpuError> {
         let addr = match self.get_data(memory, addressing_mode) {
             DataType::Address(addr) => addr,
-            _ => return self.crash(memory, "Should only have an address here".to_string()),
+            _ => return self.crash(memory, CpuError::OpcodeError("Should only have an address here".to_string())),
         };
 
         self.push_stack(memory, self.pc);
@@ -555,7 +557,7 @@ impl Cpu {
     ) -> Result<(), CpuError> {
         let value = match self.get_data(memory, addressing_mode) {
             DataType::ValueU16(value) => value,
-            _ => return self.crash(memory, "Only expected u16 value here".to_string()),
+            _ => return self.crash(memory, CpuError::OpcodeError("Only expected u16 value here".to_string())),
         };
 
         self.push_stack(memory, value);
@@ -576,9 +578,9 @@ impl Cpu {
                 Register::BC => self.reg.set_af(value),
                 Register::DE => self.reg.set_af(value),
                 Register::HL => self.reg.set_af(value),
-                _ => self.crash(memory, "Can only pop stack to 16 bit register".to_string())?,
+                _ => self.crash(memory, CpuError::OpcodeError("Can only pop stack to 16 bit register".to_string()))?,
             },
-            _ => self.crash(memory, "Can only pop stack to 16 bit register".to_string())?,
+            _ => self.crash(memory, CpuError::OpcodeError("Can only pop stack to 16 bit register".to_string()))?,
         }
 
         Ok(())
@@ -595,7 +597,7 @@ impl Cpu {
             _ => {
                 return self.crash(
                     memory,
-                    "bit check not yet implemented or dosent exist".to_string(),
+                    CpuError::OpcodeError("bit check not yet implemented or dosent exist".to_string()),
                 )
             }
         };
@@ -620,7 +622,7 @@ impl Cpu {
         let data = match self.get_data(memory, addressing_mode) {
             DataType::ValueU8(value) => value,
             DataType::Address(addr) => memory.read_u8(addr),
-            _ => return self.crash(memory, "Expected u8 value here".to_string()),
+            _ => return self.crash(memory, CpuError::OpcodeError("Expected u8 value here".to_string())),
         };
 
         let new_bit_0 = self.reg.get_c_flag();
@@ -649,19 +651,19 @@ impl Cpu {
                 Register::E => self.reg.a = new_val,
                 Register::H => self.reg.a = new_val,
                 Register::L => self.reg.a = new_val,
-                _ => self.crash(memory, "Should only rotate 8 bit values".to_string())?,
+                _ => self.crash(memory, CpuError::OpcodeError("Should only rotate 8 bit values".to_string()))?,
             },
             AddressingMode::AddressRegister(_) => {
                 let addr = match self.get_data(memory, addressing_mode) {
                     DataType::Address(addr) => addr,
-                    _ => return self.crash(memory, "Expected addr value here".to_string()),
+                    _ => return self.crash(memory, CpuError::OpcodeError("Expected addr value here".to_string())),
                 };
 
                 memory.write_u8(addr, new_val);
             }
             _ => self.crash(
                 memory,
-                "Should only have r8 or address register".to_string(),
+                CpuError::OpcodeError("Should only have r8 or address register".to_string()),
             )?,
         }
 
@@ -677,7 +679,7 @@ impl Cpu {
         let value = match self.get_data(memory, addressing_mode) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => memory.read_u8(addr),
-            _ => return self.crash(memory, "Should only have u8 value".to_string()),
+            _ => return self.crash(memory, CpuError::OpcodeError("Should only have u8 value".to_string())),
         };
 
         let (diff, borrow) = self.borrow_track_sub_u8(self.reg.a, value);
@@ -729,7 +731,7 @@ impl Cpu {
                     if prefixed {
                         match self.crash(
                             memory,
-                            format!("Prefixed Opocde {:#04x} not in opcode map", code),
+                            CpuError::UnrecognizedOpcode(code, true),
                         ) {
                             Ok(_) => panic!("This panic should not be possible to reach, if it is something went very wrong"),
                             Err(e) => return Err(e)
@@ -737,7 +739,7 @@ impl Cpu {
                     } else {
                         match self.crash(
                             memory,
-                            format!("Normal Opocde {:#04x} not in opcode map", code),
+                            CpuError::UnrecognizedOpcode(code, false),
                         ) {
                             Ok(_) => panic!("This panic should not be possible to reach, if it is something went very wrong"),
                             Err(e) => return Err(e)
@@ -765,14 +767,14 @@ impl Cpu {
                 0x7c => self.bit_check(memory, 7, &rhs)?,
                 _ => self.crash(
                     memory,
-                    format!("Prefixed code {:#04x} not implemented", code),
+                    CpuError::OpcodeNotImplemented(code, true),
                 )?,
             };
         } else {
             match code {
                 0x00 => (),
-                0x04 | 0x05 | 0x0d | 0x15 | 0x1d | 0x3d => self.decrement_u8(memory, &lhs)?,
-                0x0c | 0x24 => self.increment_u8(memory, &lhs)?,
+                0x05 | 0x0d | 0x15 | 0x1d | 0x3d => self.decrement_u8(memory, &lhs)?,
+                0x04 | 0x0c | 0x24 => self.increment_u8(memory, &lhs)?,
                 0x13 | 0x23 => self.increment_u16(memory, &lhs)?,
                 0x06 | 0x0e | 0x11 | 0x1a | 0x1e | 0x21 | 0x2e | 0x31 | 0x3e | 0x4f | 0x57
                 | 0x67 | 0x77 | 0x7b | 0x7c | 0xe0 | 0xe2 | 0xea | 0xf0 => {
@@ -797,10 +799,7 @@ impl Cpu {
                 0x90 => self.sub_a(memory, &rhs, true)?,
                 0xaf => self.xor_with_a(memory, &rhs)?,
                 0xbe | 0xfe => self.sub_a(memory, &rhs, false)?,
-                _ => match self.crash(memory, format!("Unknown opcode: {:#04x}", code)) {
-                    Ok(_) => panic!("This panic should not be possible to reach, if it is something went very wrong"),
-                    Err(e) => return Err(e)
-                },
+                _ => self.crash(memory, CpuError::OpcodeNotImplemented(code, false))? 
             };
         };
 
@@ -834,33 +833,3 @@ impl Cpu {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_bit_shift() {
-        let num: u8 = 0b1100_0000;
-        let c = 0;
-        let new_bit_0 = c;
-        let c = (num & (1 << 7)) >> 7;
-
-        let new_val = (num << 1) | new_bit_0;
-
-        assert_eq!(new_val, 0b1000_0000);
-        assert_eq!(c, 1);
-    }
-
-    #[test]
-    fn test_get_bit() {
-        let num: u8 = 0b1100_0010;
-        assert_eq!(num.get_bit(0), 0);
-        assert_eq!(num.get_bit(1), 1);
-        assert_eq!(num.get_bit(2), 0);
-        assert_eq!(num.get_bit(3), 0);
-        assert_eq!(num.get_bit(4), 0);
-        assert_eq!(num.get_bit(5), 0);
-        assert_eq!(num.get_bit(6), 1);
-        assert_eq!(num.get_bit(7), 1);
-    }
-}
