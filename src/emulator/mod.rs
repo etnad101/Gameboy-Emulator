@@ -116,6 +116,7 @@ impl Emulator {
     }
 
     fn load_state(&mut self, state: State) {
+        /*
         println!(
             "Initial: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#04x}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
             state.a,
@@ -129,6 +130,7 @@ impl Emulator {
             state.sp,
             state.pc - 1
         );
+        */
         self.cpu.load_state(&state);
         self.memory.clear();
         for mem_state in state.ram {
@@ -140,6 +142,7 @@ impl Emulator {
 
     fn check_state(&self, state: State) -> bool {
         let (a, b, c, d, e, f, h, l, sp, pc) = self.cpu.get_state();
+        /*
         println!(
             "Expexted: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#04x}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
             state.a,
@@ -157,6 +160,7 @@ impl Emulator {
             "Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#04x}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
             a, b, c, d, e, f, h, l, sp, pc
         );
+        */
         let equal = a == state.a
             && b == state.b
             && c == state.c
@@ -182,34 +186,44 @@ impl Emulator {
     }
 
     // Test Code
-    pub fn run_opcode_tests(&mut self) -> Result<(), CpuError> {
-        // let test_dir = fs::read_dir("./tests");
-        let data = fs::read_to_string("./tests/00.json").unwrap();
+    pub fn run_opcode_tests(&mut self) -> Result<(), Box<dyn Error>> {
+        let test_dir = fs::read_dir("./tests")?;
+        for file in test_dir {
+            let path = file?.path();
+            // TODO: add check to make sure file is valid test
+            
+            let data = fs::read_to_string(path).unwrap();
 
-        let test_data: Vec<TestData> = serde_json::from_str(&data).unwrap();
-        let total_tests = test_data.len();
-        let name = test_data[0].name.clone();
+            let test_data: Vec<TestData> = serde_json::from_str(&data).unwrap();
+            let total_tests = test_data.len();
+            let name = test_data[0].name.clone();
 
-        let mut tests_completed = 0;
-        let mut passed = 0;
-        for test in test_data {
-            self.load_state(test.initial);
-            self.cpu.execute_next_opcode(&mut self.memory)?;
+            let mut current_test = 0;
+            let mut passed = 0;
+            println!("----------");
+            for test in test_data {
+                current_test += 1;
+                print!(
+                    "\rTesting {} ({:>3}/{}) ",
+                    name, current_test, total_tests
+                );
+                std::io::stdout().flush().unwrap();
+                self.load_state(test.initial);
+                match self.cpu.execute_next_opcode(&mut self.memory) {
+                    Ok(_) => (),
+                    Err(e) => {
+                        println!("{e}");
+                        break;
+                    }
+                }
 
-            if self.check_state(test.after) {
-                passed += 1;
+                if self.check_state(test.after) {
+                    passed += 1;
+                }
+
             }
-            println!();
-
-            tests_completed += 1;
-            print!(
-                "\rTesting {} ({:>3}/{})",
-                name, tests_completed, total_tests
-            );
-            println!();
-            std::io::stdout().flush().unwrap();
+            println!("\n{}/{} tests passed", passed, total_tests);
         }
-        println!("{} tests passed", passed);
         Ok(())
     }
 }

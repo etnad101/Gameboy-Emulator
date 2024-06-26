@@ -143,7 +143,6 @@ impl Cpu {
     }
 
     pub fn crash(&mut self, memory: &MemoryBus, msg: String) -> Result<(), CpuError> {
-        println!("Starting crash sequence...");
         match DEBUG_MODE {
             Some(_) => {
                 self.dump_mem(memory);
