@@ -7,21 +7,18 @@ use crate::emulator::cpu::{
     opcodes::{AddressingMode, Opcode, Register},
     registers::Registers,
 };
-use crate::emulator::memory::MemoryBus;
+use crate::emulator::{
+    CpuDebugMode,
+    memory::MemoryBus
+};
 use crate::utils::GetBit;
 use std::{collections::HashMap, fs};
 
 use super::{
     errors::CpuError,
-    test::{State, TestData},
+    test::State,
 };
 
-const DEBUG_MODE: Option<DebugMode> = None;
-
-enum DebugMode {
-    Memory,
-    Instructions,
-}
 
 enum JumpCondition {
     Z,
@@ -52,10 +49,11 @@ pub struct Cpu {
     normal_opcodes: HashMap<u8, opcodes::Opcode>,
     prefixed_opcodes: HashMap<u8, opcodes::Opcode>,
     debug_log: String,
+    debug_mode: Option<CpuDebugMode>,
 }
 
 impl Cpu {
-    pub fn new() -> Cpu {
+    pub fn new(debug_mode: Option<CpuDebugMode>) -> Cpu {
         Cpu {
             reg: Registers::new(),
             sp: 0,
@@ -63,6 +61,7 @@ impl Cpu {
             normal_opcodes: Opcode::generate_normal_opcode_map(),
             prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
             debug_log: String::new(),
+            debug_mode,
         }
     }
 
@@ -119,8 +118,8 @@ impl Cpu {
     }
 
     fn log_debug_info(&mut self, asm: String) {
-        match DEBUG_MODE {
-            Some(DebugMode::Instructions) => {
+        match self.debug_mode {
+            Some(CpuDebugMode::Instructions) => {
                 self.debug_log.push_str(&asm.to_string());
                 self.debug_log
                     .push_str(&format!("\nStack Pointer: {:#04x}", self.sp));
@@ -143,7 +142,7 @@ impl Cpu {
     }
 
     pub fn crash(&mut self, memory: &MemoryBus, error: CpuError) -> Result<(), CpuError> {
-        match DEBUG_MODE {
+        match self.debug_mode {
             Some(_) => {
                 self.dump_mem(memory);
                 let dt = Local::now();
@@ -316,29 +315,16 @@ impl Cpu {
         Ok(())
     }
 
-    fn carry_track_add_u8(&self, lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
+    fn half_carry_add_u8(&self, lhs: u8, rhs: u8) -> (u8, bool) {
         let sum = lhs.wrapping_add(rhs);
-        let bit_check = lhs & rhs;
-        let mut tracked_bits = [false; 8];
-        for i in 0..8 {
-            let bit = bit_check & (1 << i);
-            if bit > 0 {
-                tracked_bits[i] = true;
-            }
-        }
-        (sum, tracked_bits)
+        let carry = (((lhs & 0xF) + (rhs & 0xF)) & 0x10) == 0x10;
+        (sum, carry)
     }
 
-    fn borrow_track_sub_u8(&self, lhs: u8, rhs: u8) -> (u8, [bool; 8]) {
-        let sum = lhs.wrapping_sub(rhs);
-        let mut tracked_bits = [false; 8];
-        for i in 0..7 {
-            let bit = lhs & (1 << i);
-            if bit == 0 {
-                tracked_bits[i + 1] = true;
-            }
-        }
-        (sum, tracked_bits)
+    fn half_carry_sub_u8(&self, lhs: u8, rhs: u8) -> (u8, bool) {
+        let diff = lhs.wrapping_sub(rhs);
+        let borrow = lhs & 0xF < (rhs) & 0xF;
+        return (diff, borrow)
     }
 
     fn increment_u8(
@@ -346,8 +332,8 @@ impl Cpu {
         memory: &mut MemoryBus,
         addressing_mode: &AddressingMode,
     ) -> Result<(), CpuError> {
-        let (sum, overflow) = match self.get_data(memory, addressing_mode) {
-            DataType::ValueU8(val) => self.carry_track_add_u8(val, 1),
+        let (sum, carry) = match self.get_data(memory, addressing_mode) {
+            DataType::ValueU8(val) => self.half_carry_add_u8(val, 1),
             _ => return self.crash(memory, CpuError::OpcodeError("Expected u8 here".to_string())),
         };
 
@@ -377,7 +363,7 @@ impl Cpu {
 
         self.reg.clear_n_flag();
 
-        if overflow[3] {
+        if carry {
             self.reg.set_h_flag()
         } else {
             self.reg.clear_h_flag()
@@ -415,7 +401,7 @@ impl Cpu {
         addressing_mode: &AddressingMode,
     ) -> Result<(), CpuError> {
         let (diff, borrow) = match self.get_data(memory, addressing_mode) {
-            DataType::ValueU8(val) => self.borrow_track_sub_u8(val, 1),
+            DataType::ValueU8(val) => self.half_carry_sub_u8(val, 1),
             _ => return self.crash(memory, CpuError::OpcodeError("Expected u8 here".to_string())),
         };
 
@@ -444,7 +430,9 @@ impl Cpu {
             self.reg.clear_z_flag()
         }
 
-        if borrow[4] {
+        self.reg.set_n_flag();
+
+        if borrow {
             self.reg.set_h_flag()
         } else {
             self.reg.clear_h_flag()
@@ -455,7 +443,7 @@ impl Cpu {
 
     fn xor_with_a(&mut self, memory: &MemoryBus, rhs: &AddressingMode) -> Result<(), CpuError> {
         let res = match self.get_data(memory, rhs) {
-            DataType::ValueU8(val) => val ^ self.reg.a,
+            DataType::ValueU8(val) => self.reg.a ^ val,
             DataType::Address(addr) => {
                 let val = memory.read_u8(addr);
                 val ^ self.reg.a
@@ -468,9 +456,17 @@ impl Cpu {
             }
         };
 
+        self.reg.a = res;
+
         if res == 0 {
             self.reg.set_z_flag()
+        } else {
+            self.reg.clear_z_flag()
         }
+
+        self.reg.clear_n_flag();
+        self.reg.clear_h_flag();
+        self.reg.clear_c_flag();
 
         Ok(())
     }
@@ -617,7 +613,7 @@ impl Cpu {
         &mut self,
         memory: &mut MemoryBus,
         addressing_mode: &AddressingMode,
-        update_z_flag: bool,
+        prefixed: bool,
     ) -> Result<(), CpuError> {
         let data = match self.get_data(memory, addressing_mode) {
             DataType::ValueU8(value) => value,
@@ -628,16 +624,19 @@ impl Cpu {
         let new_bit_0 = self.reg.get_c_flag();
         let shifted_out_bit = (data & (1 << 7)) >> 7;
 
+        if prefixed && shifted_out_bit == 0{
+            self.reg.set_z_flag()
+        } else {
+            self.reg.clear_z_flag()
+        }
+
+        self.reg.clear_n_flag();
+        self.reg.clear_h_flag();
+
         if shifted_out_bit == 1 {
             self.reg.set_c_flag();
-            self.reg.clear_z_flag();
         } else {
             self.reg.clear_c_flag();
-            if update_z_flag {
-                self.reg.set_z_flag();
-            } else {
-                self.reg.clear_z_flag();
-            }
         }
 
         let new_val = (data << 1) | new_bit_0;
@@ -682,7 +681,7 @@ impl Cpu {
             _ => return self.crash(memory, CpuError::OpcodeError("Should only have u8 value".to_string())),
         };
 
-        let (diff, borrow) = self.borrow_track_sub_u8(self.reg.a, value);
+        let (diff, borrow) = self.half_carry_sub_u8(self.reg.a, value);
 
         if diff == 0 {
             self.reg.set_z_flag();
@@ -692,7 +691,7 @@ impl Cpu {
 
         self.reg.set_n_flag();
 
-        if borrow[4] {
+        if borrow {
             self.reg.set_h_flag();
         } else {
             self.reg.clear_h_flag();

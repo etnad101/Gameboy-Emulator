@@ -12,7 +12,7 @@ use errors::{CpuError, EmulatorError};
 use memory::MemoryBus;
 use ppu::Ppu;
 use rom::Rom;
-use test::{State, TestData};
+use test::TestData;
 
 use crate::drivers::display::Color;
 
@@ -21,6 +21,11 @@ const MEM_SIZE: usize = 0xFFFF;
 const MAX_CYCLES_PER_FRAME: usize = CPU_FREQ / 60; // Divide frequency by frame rate
 const DIV_FREQ: usize = 16380; // Actual rate is 16,384 hz
 const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
+
+pub enum CpuDebugMode {
+    Memory,
+    Instructions,
+}
 
 pub enum LCDRegister {
     LCDC = 0xFF40,
@@ -51,12 +56,12 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn new() -> Emulator {
+    pub fn new(debug_mode: Option<CpuDebugMode>) -> Emulator {
         let mut memory = MemoryBus::new(MEM_SIZE);
         memory.load_rom(true, None).unwrap();
 
         Emulator {
-            cpu: Cpu::new(),
+            cpu: Cpu::new(debug_mode),
             ppu: Ppu::new(),
             memory,
             timer_cycles: 0,
@@ -144,15 +149,19 @@ impl Emulator {
             let mem_value = self.memory.read_u8(addr);
 
             if mem_value != correct_value {
-                // TODO: Print out where memory values are incorrect 
-                print!("incorrect memory value");
-                return false;
+                if addr != 0xff04 {
+                    print!(
+                        "addr: {}, val: {}, expected: {}",
+                        addr, mem_value, correct_value
+                    );
+                    return false;
+                }
             }
         }
 
         if !equal {
             println!(
-                "Initial: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                " Initial: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
                 test.initial.a,
                 test.initial.b,
                 test.initial.c,
@@ -165,11 +174,11 @@ impl Emulator {
                 test.initial.pc - 1
             );
             println!(
-                "Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                "  Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
                 a, b, c, d, e, f, h, l, sp, pc
             );
             println!(
-                "Expexted: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                "Expected: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
                 test.after.a,
                 test.after.b,
                 test.after.c,
@@ -215,7 +224,7 @@ impl Emulator {
                     }
                 }
 
-                if self.check_state(&test){
+                if self.check_state(&test) {
                     passed += 1;
                 } else {
                     all_passed = false;

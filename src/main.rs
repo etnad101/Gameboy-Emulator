@@ -13,8 +13,11 @@ mod utils;
 use std::error::Error;
 
 use drivers::display::{Display, WHITE};
-use emulator::rom::Rom;
-use emulator::Emulator;
+use emulator::{
+    Emulator,
+    CpuDebugMode,
+    rom::Rom
+};
 
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
@@ -24,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
-    let mut emulator = Emulator::new();
+    let mut emulator = Emulator::new(Some(CpuDebugMode::Memory));
 
     emulator.load_rom(test_rom)?;
 
@@ -50,7 +53,7 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new();
+        let mut emulator = Emulator::new(None);
         assert!(emulator._run_opcode_tests().unwrap());
         
     }
