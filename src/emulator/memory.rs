@@ -1,6 +1,6 @@
-use std::{error::Error, fs};
+use std::{error::Error, fs, ops::Range};
 
-use super::errors::EmulatorError;
+use super::errors::{EmulatorError, MemError};
 
 pub struct MemoryBus {
     size: usize,
@@ -55,6 +55,15 @@ impl MemoryBus {
 
     pub fn read_u8(&self, addr: u16) -> u8 {
         self.bytes[addr as usize]
+    }
+
+    pub fn get_range(&self, range: Range<usize>) -> Result<Vec<u8>, MemError> {
+        if range.end > self.size {
+            return Err(MemError::OutOfRange)
+        }
+        let bytes = self.bytes[range].to_owned();
+
+        Ok(bytes)
     }
 
     pub fn write_u8(&mut self, addr: u16, value: u8) {

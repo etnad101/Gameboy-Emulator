@@ -1,6 +1,21 @@
 use std::fmt;
 
 #[derive(Debug)]
+pub enum MemError {
+    OutOfRange
+}
+
+impl fmt::Display for MemError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MemError::OutOfRange => write!(f, "requested memory range does not exist"),
+        }
+    }
+}
+
+impl std::error::Error for MemError {}
+
+#[derive(Debug)]
 pub enum CpuError {
     OpcodeNotImplemented(u8, bool),
     UnrecognizedOpcode(u8, bool),

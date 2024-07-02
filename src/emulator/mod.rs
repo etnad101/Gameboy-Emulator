@@ -117,7 +117,7 @@ impl Emulator {
 
         // Temporarily render at the end of every frame for simplicity, implement pixel FIFO later
         // Move code out of this function and into update_graphics later
-        Ok(self.ppu.render_screen(&mut self.memory))
+        Ok(self.ppu.render_screen(&mut self.memory)?)
     }
 
     fn load_state(&mut self, test: &TestData) {
