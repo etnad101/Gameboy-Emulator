@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use super::errors::MemError;
 use super::memory::MemoryBus;
 use super::LCDRegister;
 use crate::drivers::display::Color;
@@ -39,19 +40,7 @@ impl Tile {
     pub fn get_data(&self) -> [u8; 64] {
         self.data
     }
-}
-
-pub struct Ppu {
-    buffer: Vec<Color>,
-}
-
-impl Ppu {
-    pub fn new() -> Ppu {
-        Ppu {
-            buffer: vec![WHITE; 256 * 256],
-        }
-    }
-
+    
     fn parse_tile_data(data: Vec<u8>) -> Vec<Tile> {
         let mut tiles: Vec<Tile> = Vec::new();
 
@@ -64,6 +53,18 @@ impl Ppu {
         }
 
         tiles
+    }
+}
+
+pub struct Ppu {
+    buffer: Vec<Color>,
+}
+
+impl Ppu {
+    pub fn new() -> Ppu {
+        Ppu {
+            buffer: vec![WHITE; 256 * 256],
+        }
     }
 
     pub fn draw_pixel(&mut self, x: usize, y: usize, color: Color) {
@@ -118,8 +119,7 @@ impl Ppu {
         }
     }
 
-    pub fn render_screen(&self, memory: &mut MemoryBus) -> Vec<u32> {
-        let mut buff = vec![WHITE; 160 * 144];
+    pub fn render_screen(&mut self, memory: &mut MemoryBus) -> Result<Vec<u32>, MemError> {
 
         // get tile
         let fetcher_x = 0;
@@ -144,8 +144,21 @@ impl Ppu {
             (0x9000 + offset) as u16
         };
 
-        // additional calculation needed to find the 160x144 area from the 256x256 tile map
+        // display all tiles to test
+        let tiles = Tile::parse_tile_data(memory.get_range(0x8000..0x81a0)?);
+        let mut tx = 0;
+        let mut ty = 0;
+        for tile in tiles {
+            self.draw_tile(tx, ty, &tile).unwrap();
+            tx += 1;
+            if tx >= 10 {
+                tx = 0;
+                ty += 1;
+            }
+        }
 
-        buff
+        // TODO: additional calculation needed to find the 160x144 area from the 256x256 tile map
+        // Temporarily return white screen
+        Ok(vec![WHITE; 160 * 144])
     }
 }

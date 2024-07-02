@@ -12,7 +12,7 @@ use crate::emulator::{
     memory::MemoryBus
 };
 use crate::utils::GetBit;
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, path::Path};
 
 use super::{
     errors::CpuError,
@@ -154,6 +154,9 @@ impl Cpu {
                     DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
                 let log_name = "crash_log".to_string()
                     + &now.replace(" ", "_").replace(":", "-").replace(".", "_");
+                if !Path::new("./logs/").exists() {
+                    fs::create_dir("./logs").expect("Unable to create log directory")
+                };
                 let path = "./logs/".to_string() + &log_name;
 
                 fs::File::create(path.clone()).expect("unable to create file");
@@ -215,10 +218,8 @@ impl Cpu {
     pub fn pop_stack(&mut self, memory: &mut MemoryBus) -> u16 {
         self.sp += 1;
         let lo = memory.read_u8(self.sp);
-        memory.write_u8(self.sp, 0);
         self.sp += 1;
         let hi = memory.read_u8(self.sp);
-        memory.write_u8(self.sp, 0);
         ((hi as u16) << 8) | lo as u16
     }
 
@@ -571,9 +572,9 @@ impl Cpu {
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => match reg {
                 Register::AF => self.reg.set_af(value),
-                Register::BC => self.reg.set_af(value),
-                Register::DE => self.reg.set_af(value),
-                Register::HL => self.reg.set_af(value),
+                Register::BC => self.reg.set_bc(value),
+                Register::DE => self.reg.set_bc(value),
+                Register::HL => self.reg.set_bc(value),
                 _ => self.crash(memory, CpuError::OpcodeError("Can only pop stack to 16 bit register".to_string()))?,
             },
             _ => self.crash(memory, CpuError::OpcodeError("Can only pop stack to 16 bit register".to_string()))?,

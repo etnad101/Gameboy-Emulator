@@ -1,7 +1,5 @@
 mod errors;
 
-use std::error::Error;
-
 use errors::*;
 use minifb::{Key, Window, WindowOptions};
 
