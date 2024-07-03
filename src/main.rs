@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
-    let mut emulator = Emulator::new(Some(CpuDebugMode::Memory));
+    let mut emulator = Emulator::new(None);
 
     emulator.load_rom(test_rom)?;
 

@@ -24,7 +24,7 @@ pub struct Display {
 #[allow(dead_code)]
 impl Display {
     pub fn new(width: usize, height: usize) -> Result<Self, minifb::Error> {
-        let buffer: Vec<u32> = vec![0; width * height];
+        let buffer: Vec<Color> = vec![0; width * height];
 
         let window_options = WindowOptions {
             borderless: true,
@@ -89,7 +89,7 @@ impl Display {
         }
     }
 
-    pub fn set_buffer(&mut self, buff: Vec<u32>) {
+    pub fn set_buffer(&mut self, buff: Vec<Color>) {
         if self.buffer.len() != buff.len() {
             panic!("Buffers must be same size");
         }
