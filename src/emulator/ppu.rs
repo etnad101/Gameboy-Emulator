@@ -5,7 +5,6 @@ use super::memory::MemoryBus;
 use super::LCDRegister;
 use crate::drivers::display::Color;
 use crate::{drivers::display::WHITE, utils::GetBit};
-use crate::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const CYCLES_PER_SCANLINE: usize = 456 / 4;
 
@@ -68,15 +67,15 @@ impl Ppu {
     }
 
     pub fn draw_pixel(&mut self, x: usize, y: usize, color: Color) {
-        if x > SCREEN_WIDTH {
+        if x > 256 {
             panic!("ERROR::PPU attempting to draw outside of buffer (width)")
         }
 
-        if y > SCREEN_HEIGHT {
+        if y > 256 {
             panic!("ERROR::PPU attempting to draw outside of buffer (height)")
         }
 
-        let index = (y * SCREEN_WIDTH) + x;
+        let index = (y * 256) + x;
         self.buffer[index] = color;
     }
 
@@ -119,13 +118,26 @@ impl Ppu {
         }
     }
 
-    pub fn render_screen(&mut self, memory: &mut MemoryBus) -> Result<Vec<u32>, MemError> {
+    fn convert_buff_size(&self) -> Vec<Color> {
+        let mut buff: Vec<Color> = vec![WHITE; 160 * 144];
+
+        for y in 0..144 {
+            for x in 0..160 {
+                let orig_addr = (y * 256) + x;
+                let target_addr = (y * 160) + x;
+                buff[target_addr] = self.buffer[orig_addr];
+            }
+        }
+        buff
+    }
+
+    pub fn render_screen(&mut self, memory: &mut MemoryBus) -> Result<Vec<Color>, MemError> {
 
         // get tile
         let fetcher_x = 0;
         let fetcher_y = 0;
         let lcdc = memory.read_u8(LCDRegister::LCDC as u16);
-        // change false to chekc if x coordinate of current scanline is in window
+        // change false to check if x coordinate of current scanline is in window
         let tilemap_base = if (lcdc.get_bit(3) == 1) && (false) {
             0x9c00
         } else if (lcdc.get_bit(6) == 1) && (false) {
@@ -151,14 +163,13 @@ impl Ppu {
         for tile in tiles {
             self.draw_tile(tx, ty, &tile).unwrap();
             tx += 1;
-            if tx >= 10 {
+            if tx >= 20 {
                 tx = 0;
                 ty += 1;
             }
         }
 
         // TODO: additional calculation needed to find the 160x144 area from the 256x256 tile map
-        // Temporarily return white screen
-        Ok(vec![WHITE; 160 * 144])
+        Ok(self.convert_buff_size())
     }
 }
