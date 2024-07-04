@@ -164,6 +164,7 @@ impl Cpu {
             }
             None => (),
         }
+        eprintln!("{:#06x}", self.pc);
         Err(error)
     }
 
@@ -316,16 +317,16 @@ impl Cpu {
         Ok(())
     }
 
-    fn half_carry_add_u8(&self, lhs: u8, rhs: u8) -> (u8, bool) {
-        let sum = lhs.wrapping_add(rhs);
-        let carry = (((lhs & 0xF) + (rhs & 0xF)) & 0x10) == 0x10;
-        (sum, carry)
+    fn carry_track_add_u8(&self, lhs: u8, rhs: u8) -> (u8, bool, bool) {
+        let (sum, full_carry) = lhs.overflowing_add(rhs);
+        let half_carry = (((lhs & 0xF) + (rhs & 0xF)) & 0x10) == 0x10;
+        (sum, half_carry, full_carry)
     }
 
-    fn half_carry_sub_u8(&self, lhs: u8, rhs: u8) -> (u8, bool) {
-        let diff = lhs.wrapping_sub(rhs);
-        let borrow = lhs & 0xF < (rhs) & 0xF;
-        return (diff, borrow)
+    fn carry_track_sub_u8(&self, lhs: u8, rhs: u8) -> (u8, bool, bool) {
+        let (diff, full_borrow) = lhs.overflowing_sub(rhs);
+        let half_borrow = lhs & 0xF < (rhs) & 0xF;
+        return (diff, half_borrow, full_borrow)
     }
 
     fn increment_u8(
@@ -333,8 +334,8 @@ impl Cpu {
         memory: &mut MemoryBus,
         addressing_mode: &AddressingMode,
     ) -> Result<(), CpuError> {
-        let (sum, carry) = match self.get_data(memory, addressing_mode) {
-            DataType::ValueU8(val) => self.half_carry_add_u8(val, 1),
+        let (sum, half_carry, _) = match self.get_data(memory, addressing_mode) {
+            DataType::ValueU8(val) => self.carry_track_add_u8(val, 1),
             _ => return self.crash(memory, CpuError::OpcodeError("Expected u8 here".to_string())),
         };
 
@@ -364,7 +365,7 @@ impl Cpu {
 
         self.reg.clear_n_flag();
 
-        if carry {
+        if half_carry {
             self.reg.set_h_flag()
         } else {
             self.reg.clear_h_flag()
@@ -401,8 +402,8 @@ impl Cpu {
         memory: &mut MemoryBus,
         addressing_mode: &AddressingMode,
     ) -> Result<(), CpuError> {
-        let (diff, borrow) = match self.get_data(memory, addressing_mode) {
-            DataType::ValueU8(val) => self.half_carry_sub_u8(val, 1),
+        let (diff, half_borrow, _) = match self.get_data(memory, addressing_mode) {
+            DataType::ValueU8(val) => self.carry_track_sub_u8(val, 1),
             _ => return self.crash(memory, CpuError::OpcodeError("Expected u8 here".to_string())),
         };
 
@@ -433,7 +434,7 @@ impl Cpu {
 
         self.reg.set_n_flag();
 
-        if borrow {
+        if half_borrow {
             self.reg.set_h_flag()
         } else {
             self.reg.clear_h_flag()
@@ -670,6 +671,50 @@ impl Cpu {
         Ok(())
     }
 
+    fn add_a(&mut self, memory: &mut MemoryBus, lhs: &AddressingMode, rhs: &AddressingMode) -> Result<(), CpuError> {
+        let value = match self.get_data(memory, rhs) {
+            DataType::ValueU8(val) => val,
+            DataType::Address(addr) => memory.read_u8(addr),
+            _ => match self.crash(memory, CpuError::OpcodeError("add_a function recieved unexpeced data type".to_string())) {
+                Ok(_) => panic!("This should not be able to run, if it has something has gone wrong"),
+                Err(e) => return Err(e),
+            },
+        };
+
+        let (sum, half_carry, full_carry) = self.carry_track_add_u8(self.reg.a, value);
+
+        if sum == 0 {
+            self.reg.set_z_flag();
+        } else {
+            self.reg.clear_z_flag();
+        }
+
+        self.reg.clear_n_flag();
+
+        if half_carry {
+            self.reg.set_h_flag();
+        } else {
+            self.reg.clear_h_flag();
+        }
+
+        if full_carry {
+            self.reg.set_c_flag();
+        } else {
+            self.reg.clear_c_flag();
+        }
+
+        match lhs {
+            AddressingMode::ImmediateRegister(Register::A) => self.reg.a = sum,
+            AddressingMode::AddressRegister(Register::HL) => {
+                let addr = self.reg.hl();
+                memory.write_u8(addr, sum);
+            }
+            _ => self.crash(memory, CpuError::OpcodeError("add_a, unimplemented or unexpected addressing mode".to_string()))?,
+        }
+
+        Ok(())
+    }
+
     fn sub_a(
         &mut self,
         memory: &mut MemoryBus,
@@ -682,7 +727,7 @@ impl Cpu {
             _ => return self.crash(memory, CpuError::OpcodeError("Should only have u8 value".to_string())),
         };
 
-        let (diff, borrow) = self.half_carry_sub_u8(self.reg.a, value);
+        let (diff, half_borrow, _) = self.carry_track_sub_u8(self.reg.a, value);
 
         if diff == 0 {
             self.reg.set_z_flag();
@@ -692,7 +737,7 @@ impl Cpu {
 
         self.reg.set_n_flag();
 
-        if borrow {
+        if half_borrow {
             self.reg.set_h_flag();
         } else {
             self.reg.clear_h_flag();
@@ -776,8 +821,8 @@ impl Cpu {
                 0x05 | 0x0d | 0x15 | 0x1d | 0x3d => self.decrement_u8(memory, &lhs)?,
                 0x04 | 0x0c | 0x24 => self.increment_u8(memory, &lhs)?,
                 0x13 | 0x23 => self.increment_u16(memory, &lhs)?,
-                0x06 | 0x0e | 0x11 | 0x1a | 0x1e | 0x21 | 0x2e | 0x31 | 0x3e | 0x4f | 0x57
-                | 0x67 | 0x77 | 0x7b | 0x7c | 0xe0 | 0xe2 | 0xea | 0xf0 => {
+                0x06 | 0x0e | 0x11 | 0x16 | 0x1a | 0x1e | 0x21 | 0x2e | 0x31 | 0x3e | 0x4f | 0x57
+                | 0x67 | 0x77 | 0x78 | 0x7b | 0x7c | 0x7d | 0xe0 | 0xe2 | 0xea | 0xf0 => {
                     self.load_or_store_value(memory, &lhs, &rhs, StoreLoadModifier::None)?
                 }
                 0x22 => self.load_or_store_value(memory, &lhs, &rhs, StoreLoadModifier::IncHL)?,
@@ -786,6 +831,7 @@ impl Cpu {
                 0x18 => extra_cycles = self.reljump(memory, &rhs, JumpCondition::None)?,
                 0x20 => extra_cycles = self.reljump(memory, &rhs, JumpCondition::NZ)?,
                 0x28 => extra_cycles = self.reljump(memory, &rhs, JumpCondition::Z)?,
+                0x86 => self.add_a(memory, &lhs, &rhs)?,
                 0xc1 => self.pop_stack_instr(memory, &lhs)?,
                 0xc5 => self.push_stack_instr(memory, &lhs)?,
                 0xc9 => {
