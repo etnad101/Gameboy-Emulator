@@ -36,7 +36,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     display.set_background(WHITE);
 
     while display.is_open() {
-        let frame = emulator.update()?;
+        let frame = match emulator.update() {
+            Ok(frame) => frame,
+            Err(e) => {println!("{}", e); return Ok(())}
+        };
 
         display.clear();
         display.set_buffer(frame);

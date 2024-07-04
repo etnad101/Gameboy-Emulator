@@ -117,6 +117,7 @@ impl Emulator {
 
         // Temporarily render at the end of every frame for simplicity, implement pixel FIFO later
         // Move code out of this function and into update_graphics later
+        println!("SCX: {}, SCY {}", self.memory.read_u8(LCDRegister::SCX as u16), self.memory.read_u8(LCDRegister::SCY as u16));
         Ok(self.ppu.render_screen(&mut self.memory)?)
     }
 

@@ -66,7 +66,7 @@ impl Ppu {
         }
     }
 
-    pub fn draw_pixel(&mut self, x: usize, y: usize, color: Color) {
+    fn draw_pixel(&mut self, x: usize, y: usize, color: Color) {
         if x > 256 {
             panic!("ERROR::PPU attempting to draw outside of buffer (width)")
         }
@@ -79,7 +79,7 @@ impl Ppu {
         self.buffer[index] = color;
     }
 
-    pub fn draw_tile(
+    fn draw_tile(
         &mut self,
         tile_x: usize,
         tile_y: usize,
@@ -131,6 +131,26 @@ impl Ppu {
         buff
     }
 
+    fn temp(&mut self, tiles: Vec<Tile>) {
+        let map: Vec<usize> = vec![
+            0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x19, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+
+        let mut tx = 0;
+        let mut ty = 0;
+        for addr in map {
+            let tile = &tiles[addr];
+            self.draw_tile(tx, ty, tile).unwrap();
+            tx += 1;
+            if tx >= 20 {
+                tx = 0;
+                ty += 1;
+            }
+        }
+
+    }
+
     pub fn render_screen(&mut self, memory: &mut MemoryBus) -> Result<Vec<Color>, MemError> {
 
         // get tile
@@ -158,17 +178,7 @@ impl Ppu {
 
         // display all tiles to test
         let tiles = Tile::parse_tile_data(memory.get_range(0x8000..0x81a0)?);
-        let mut tx = 0;
-        let mut ty = 0;
-        for tile in tiles {
-            self.draw_tile(tx, ty, &tile).unwrap();
-            tx += 1;
-            if tx >= 20 {
-                tx = 0;
-                ty += 1;
-            }
-        }
-
+        self.temp(tiles);
         // TODO: additional calculation needed to find the 160x144 area from the 256x256 tile map
         Ok(self.convert_buff_size())
     }
