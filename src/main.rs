@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     emulator.load_rom(test_rom)?;
 
-    // Gameboy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
+    // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     display.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
     display.set_background(WHITE);
 

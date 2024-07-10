@@ -16,10 +16,10 @@ use test::TestData;
 
 use crate::drivers::display::Color;
 
-const CPU_FREQ: usize = 4_194_300; // Acutal frequency is 4,194,304 hz
 const MEM_SIZE: usize = 0xFFFF;
-const MAX_CYCLES_PER_FRAME: usize = CPU_FREQ / 60; // Divide frequency by frame rate
-const DIV_FREQ: usize = 16380; // Actual rate is 16,384 hz
+const CPU_FREQ: usize = 4_194_304; // T-cycles
+const DIV_FREQ: usize = 16_384;
+const MAX_CYCLES_PER_FRAME: usize = 70_224; // CPU_FREQ / FRAME_RATE
 const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
 
 pub enum CpuDebugMode {
@@ -70,11 +70,11 @@ impl Emulator {
     }
 
     pub fn load_rom(&mut self, rom: Rom) -> Result<(), Box<dyn Error>> {
-        if rom.gb_compatible() {
+        return if rom.gb_compatible() {
             self.memory.load_rom(false, Some(rom.bytes()))?;
-            return Ok(());
+            Ok(())
         } else {
-            return Err(Box::new(EmulatorError::IncompatableRom));
+            Err(Box::new(EmulatorError::IncompatableRom))
         }
     }
 
@@ -82,27 +82,21 @@ impl Emulator {
         self.timer_cycles += cycles;
         if self.timer_cycles as usize >= DIV_UPDATE_FREQ {
             let addr = Timer::DIV as u16;
-            let div = self.memory.read_u8(addr as u16);
+            let div = self.memory.read_u8(addr);
             self.memory.write_u8(addr, div);
             self.timer_cycles = 0;
         }
     }
 
-    fn do_interupts(&self) {
+    fn do_interrupts(&self) {
         todo!()
     }
 
     pub fn update(&mut self) -> Result<Vec<Color>, Box<dyn Error>> {
-        if self.frames > 120 {
-            self.cpu.crash(
-                &self.memory,
-                CpuError::OpcodeError("Intentional crash after 2 seconds".to_string()),
-            )?
-        }
         self.frames += 1;
         let mut cycles_this_frame = 0;
 
-        while cycles_this_frame < MAX_CYCLES_PER_FRAME as u32 {
+        while cycles_this_frame < MAX_CYCLES_PER_FRAME {
             let cycles = self.cpu.execute_next_opcode(&mut self.memory)?;
 
             cycles_this_frame += cycles;
@@ -110,15 +104,12 @@ impl Emulator {
             // self.update_timers(cycles);
 
             self.ppu
-                .update_graphics(&mut self.memory, cycles_this_frame);
+                .update_graphics(&mut self.memory, cycles);
 
-            // self.do_interupts();
+            // self.do_interrupts();
         }
 
-        // Temporarily render at the end of every frame for simplicity, implement pixel FIFO later
-        // Move code out of this function and into update_graphics later
-        println!("SCX: {}, SCY {}", self.memory.read_u8(LCDRegister::SCX as u16), self.memory.read_u8(LCDRegister::SCY as u16));
-        Ok(self.ppu.render_screen(&mut self.memory)?)
+        Ok(self.ppu.get_frame())
     }
 
     fn load_state(&mut self, test: &TestData) {

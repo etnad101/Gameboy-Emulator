@@ -46,8 +46,8 @@ pub struct Cpu {
     reg: Registers,
     sp: u16,
     pc: u16,
-    normal_opcodes: HashMap<u8, opcodes::Opcode>,
-    prefixed_opcodes: HashMap<u8, opcodes::Opcode>,
+    normal_opcodes: HashMap<u8, Opcode>,
+    prefixed_opcodes: HashMap<u8, Opcode>,
     debug_log: String,
     debug_mode: Option<CpuDebugMode>,
 }
@@ -478,7 +478,7 @@ impl Cpu {
         memory: &MemoryBus,
         addressing_mode: &AddressingMode,
         condition: JumpCondition,
-    ) -> Result<u32, CpuError> {
+    ) -> Result<usize, CpuError> {
         let offset = match self.get_data(memory, addressing_mode) {
             DataType::ValueI8(val) => val,
             _ => match self.crash(memory, CpuError::OpcodeError("Should only be i8".to_string())) {
@@ -757,7 +757,7 @@ impl Cpu {
     }
 
     // Execution methods
-    pub fn execute_next_opcode(&mut self, memory: &mut MemoryBus) -> Result<u32, CpuError> {
+    pub fn execute_next_opcode(&mut self, memory: &mut MemoryBus) -> Result<usize, CpuError> {
         // Get next instruction
         let mut code = memory.read_u8(self.pc);
         let prefixed = code == 0xcb;
@@ -795,7 +795,7 @@ impl Cpu {
             (
                 opcode.asm.to_owned(),
                 opcode.bytes as u16,
-                opcode.cycles as u32,
+                opcode.m_cycles as usize,
                 opcode.lhs.clone(),
                 opcode.rhs.clone(),
             )
@@ -803,7 +803,7 @@ impl Cpu {
 
         // Execute instruction
         let mut skip_pc_increase = false;
-        let mut extra_cycles: u32 = 0;
+        let mut extra_cycles: usize = 0;
 
         if prefixed {
             code = memory.read_u8(self.pc + 1);
@@ -855,7 +855,9 @@ impl Cpu {
 
         self.log_debug_info(opcode_asm);
 
-        Ok(opcode_cycles + extra_cycles)
+        // convert m_cycles to t_cycles
+        let t_cycles = (opcode_cycles + extra_cycles) * 4;
+        Ok(t_cycles)
     }
 
     pub fn load_state(&mut self, state: &State) {

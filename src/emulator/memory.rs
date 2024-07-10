@@ -32,7 +32,7 @@ impl MemoryBus {
             }
         };
 
-        // Temporary size limit until I setup MBCs, so I can load a rom to get the boot screen
+        // Temporary size limit until I set up MBCs, so I can load a rom to get the boot screen
         let mut len = if rom.len() > 0x200 { 0x200 } else { rom.len() };
 
         let mut start_addr: usize = 0;
@@ -76,7 +76,7 @@ impl MemoryBus {
     }
 
     pub fn read_u16(&self, addr: u16) -> u16 {
-        let lo = self.bytes[(addr) as usize] as u16;
+        let lo = self.bytes[addr as usize] as u16;
         let hi = self.bytes[(addr + 1) as usize] as u16;
         (hi << 8) | lo
     }

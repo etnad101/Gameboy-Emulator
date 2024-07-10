@@ -35,7 +35,7 @@ pub struct Opcode {
     pub code: u8,
     pub asm: String,
     pub bytes: u8,
-    pub cycles: u8,
+    pub m_cycles: u8, // 1 m-cycle = 4 t-cycles
     pub lhs: AddressingMode,
     pub rhs: AddressingMode,
 }
@@ -45,7 +45,7 @@ impl Opcode {
         code: u8,
         asm: String,
         bytes: u8,
-        cycles: u8,
+        m_cycles: u8,
         lhs: AddressingMode,
         rhs: AddressingMode,
     ) -> Self {
@@ -53,7 +53,7 @@ impl Opcode {
             code,
             asm,
             bytes,
-            cycles,
+            m_cycles,
             lhs,
             rhs,
         }
