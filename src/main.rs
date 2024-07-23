@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut emulator = Emulator::new(None);
 
-    emulator.load_rom(test_rom)?;
+    // emulator.load_rom(test_rom)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     display.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
