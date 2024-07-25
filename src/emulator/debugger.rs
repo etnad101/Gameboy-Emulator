@@ -1,4 +1,6 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, fs, path::Path, rc::Rc};
+
+use chrono::{DateTime, Local};
 
 use crate::drivers::display::{Color, Display};
 
@@ -45,25 +47,30 @@ impl Tile {
         tiles
     }
 }
-pub enum DebugMode {}
+
+#[derive(PartialEq)]
+pub enum DebugFlags {
+    ShowTileMap,
+    DumpMemOnCrash,
+}
 
 pub struct Debugger<'a> {
     active: bool,
-    mode: Option<DebugMode>,
+    flags: Vec<DebugFlags>,
     debug_window: Option<&'a mut Display>,
     memory: Rc<RefCell<MemoryBus>>,
 }
 
 impl<'a> Debugger<'a> {
     pub fn new(
-        mode: Option<DebugMode>,
+        flags: Vec<DebugFlags>,
         memory: Rc<RefCell<MemoryBus>>,
         debug_window: Option<&'a mut Display>,
     ) -> Self {
-        let active = mode.is_some();
+        let active = !flags.is_empty();
         Self {
             active,
-            mode,
+            flags,
             debug_window,
             memory,
         }
@@ -77,92 +84,94 @@ impl<'a> Debugger<'a> {
         self.active = false
     }
 
-    pub fn generate_mem_dump(&mut self) -> Vec<String> {
-        let mut mem_log: Vec<String> = Vec::new();
-        mem_log.push("\nMEMORY DUMP\n------------------------------------".to_string());
-        mem_log.push("\n16KiB ROM Bank 00 | BOOT ROM $0000 - $00FF".to_string());
+    pub fn dump_mem(&self) {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpMemOnCrash)) {
+            return
+        }
+
+        let mut mem_log: String = String::new();
+
+        mem_log.push_str("\nMEMORY DUMP\n------------------------------------");
+        mem_log.push_str("\n16KiB ROM Bank 00 | BOOT ROM $0000 - $00FF");
         for i in 0..self.memory.borrow().get_size() + 1 {
             if i == 0x4000 {
-                mem_log.push("\n16 KiB ROM Bank 01-NN".to_string());
+                mem_log.push_str("\n16 KiB ROM Bank 01-NN");
             }
             if i == 0x8000 {
-                mem_log.push("\nVRAM".to_string());
+                mem_log.push_str("\nVRAM");
             }
             if i == 0xA000 {
-                mem_log.push("\n8 KiB external RAM".to_string())
+                mem_log.push_str("\n8 KiB external RAM");
             }
             if i == 0xC000 {
-                mem_log.push("\n4 KiB WRAM".to_string())
+                mem_log.push_str("\n4 KiB WRAM");
             }
             if i == 0xD000 {
-                mem_log.push("\n4 KiB WRAM".to_string())
+                mem_log.push_str("\n4 KiB WRAM");
             }
             if i == 0xE000 {
-                mem_log.push("\nEcho RAM".to_string())
+                mem_log.push_str("\nEcho RAM");
             }
             if i == 0xFE00 {
-                mem_log.push("\nObject attribute memory (OAM)".to_string())
+                mem_log.push_str("\nObject attribute memory (OAM)");
             }
             if i == 0xFEA0 {
-                mem_log.push("\n NOT USEABLE".to_string())
+                mem_log.push_str("\n NOT USEABLE");
             }
             if i == 0xFF00 {
-                mem_log.push("\nI/O Registers".to_string());
+                mem_log.push_str("\nI/O Registers");
             }
             if i == 0xFF80 {
-                mem_log.push("\nHigh RAM / HRAM".to_string())
+                mem_log.push_str("\nHigh RAM / HRAM");
             }
 
             if i % 32 == 0 {
-                mem_log.push(format!("\n|{:#06x}| ", i));
+                mem_log.push_str(&format!("\n|{:#06x}| ", i));
             } else if i % 16 == 0 {
-                mem_log.push(format!("|{:#06x}| ", i));
+                mem_log.push_str(&format!("|{:#06x}| ", i));
             } else if i % 8 == 0 {
-                mem_log.push(' '.to_string());
+                mem_log.push(' ');
             }
 
             let byte: u8 = self.memory.borrow().read_u8(i as u16);
-            mem_log.push(format!("{:02x} ", byte));
+            mem_log.push_str(&format!("{:02x} ", byte));
         }
-        mem_log
-    }
 
-    pub fn generate_instruction_info(
-        &self,
-        asm: String,
-        pc: u16,
-        sp: u16,
-        a: u8,
-        b: u8,
-        c: u8,
-        d: u8,
-        e: u8,
-        f: u8,
-        h: u8,
-        l: u8,
-    ) -> Option<Vec<String>> {
-        if self.active {
-            let mut instruction_log: Vec<String> = Vec::new();
-
-            instruction_log.push(asm.to_string());
-            instruction_log.push(format!("\nStack Pointer: {:#04x}", sp));
-            instruction_log.push(format!("\nA: {:#04x}, F: {:#010b}", a, f));
-            instruction_log.push(format!("\nB: {:#04x}, C: {:#04x}", b, c));
-            instruction_log.push(format!("\nD: {:#04x}, E: {:#04x}", d, e));
-            instruction_log.push(format!("\nH: {:#04x}, L: {:#04x}", h, l));
-            instruction_log.push("\n".to_string());
-            instruction_log.push(format!("\nProgram Counter: {:#04x}; ", pc));
-
-            return Some(instruction_log);
-        }
-        None
+        let dt = Local::now();
+        let native_utc = dt.naive_utc();
+        let offset = *dt.offset();
+        let now =
+            DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
+        let log_name = "crash_log".to_string()
+            + &now.replace(" ", "_").replace(":", "-").replace(".", "_");
+        if !Path::new("./logs/").exists() {
+            fs::create_dir("./logs").expect("Unable to create log directory")
+        };
+        let path = "./logs/".to_string() + &log_name;
+        fs::File::create(path.clone()).expect("unable to create file");
+        fs::write(path, mem_log).expect("unable to write to file");
+        
     }
 
     pub fn render_tiles(&mut self) {
-        // TODO: Change to only render when debug mode says to
+        if (!self.active) || (!self.flags.contains(&DebugFlags::ShowTileMap)) {
+            return
+        }
 
         match self.debug_window {
             Some(ref mut window) => {
+                let (length, width) = window.size();
+                // Check to see if window can hold tiles evenly without wrapping around or
+                // throwing a drawing error. Draw function expects to draw without wrapping 
+                if (width % 8) != 0 || (length % 8) != 0 {
+                    panic!("Width and height must be multiples of 8, 128x192 recomended")
+                }
+                // Check to see if the window has enough pixels to hold all the tiles
+                // 384 tiles * 64 pixels each = 24576 pixels
+                if (length * width) < 24576 {
+                    panic!("Window not big enough to display all tiles, 128x192 recomended")
+                }
+
                 window.clear();
                 let block_size: usize = 16 * 128 * 3;
                 let vram_start: usize = 0x8000;
@@ -200,7 +209,7 @@ impl<'a> Debugger<'a> {
                 }
                 window.render().unwrap();
             }
-            None => {}
+            None => panic!("Must Provide window for tile map to be drawn to")
         }
     }
     // TODO: Make function to change tile data based on num key pressed

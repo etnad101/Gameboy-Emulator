@@ -1,10 +1,10 @@
+pub mod rom;
+pub mod debugger;
 mod cpu;
 mod errors;
 mod memory;
 mod ppu;
-pub mod rom;
 mod test;
-mod debugger;
 
 use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
 
@@ -14,7 +14,7 @@ use memory::MemoryBus;
 use ppu::Ppu;
 use rom::Rom;
 use test::TestData;
-use debugger::{DebugMode, Debugger};
+use debugger::{DebugFlags, Debugger};
 
 use crate::drivers::display::{Color, Display};
 
@@ -56,12 +56,12 @@ pub struct Emulator<'a> {
 }
 
 impl<'a> Emulator<'a> {
-    pub fn new(debug_mode: Option<DebugMode>, debug_window: Option<&'a mut Display>) -> Self {
+    pub fn new(debug_flags: Vec<DebugFlags>, debug_window: Option<&'a mut Display>) -> Self {
         let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
         memory_bus.borrow_mut().load_rom(true, None).unwrap();
 
         let debugger = Rc::new(RefCell::new(Debugger::new(
-            debug_mode,
+            debug_flags,
             Rc::clone(&memory_bus),
             debug_window,
         )));

@@ -59,28 +59,7 @@ impl<'a> Cpu<'a> {
     // Debugging methods
 
     pub fn crash(&mut self, error: CpuError) -> Result<(), CpuError> {
-        // match self.debug_mode {
-        //     Some(_) => {
-        //         self.dump_mem(memory);
-        //         let dt = Local::now();
-
-        //         let native_utc = dt.naive_utc();
-        //         let offset = *dt.offset();
-
-        //         let now =
-        //             DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
-        //         let log_name = "crash_log".to_string()
-        //             + &now.replace(" ", "_").replace(":", "-").replace(".", "_");
-        //         if !Path::new("./logs/").exists() {
-        //             fs::create_dir("./logs").expect("Unable to create log directory")
-        //         };
-        //         let path = "./logs/".to_string() + &log_name;
-
-        //         fs::File::create(path.clone()).expect("unable to create file");
-        //         fs::write(path, self.debug_log.clone()).expect("unable to write to file");
-        //     }
-        //     None => (),
-        // }
+        self.debugger.borrow().dump_mem();
         eprintln!("{:#06x}", self.pc);
         Err(error)
     }
@@ -791,11 +770,6 @@ impl<'a> Cpu<'a> {
         if !skip_pc_increase {
             self.pc += opcode_bytes;
         }
-
-        self.debugger.borrow_mut().generate_instruction_info(
-            opcode_asm, self.pc, self.sp, self.reg.a, self.reg.b, self.reg.c, self.reg.d,
-            self.reg.e, self.reg.f, self.reg.h, self.reg.l,
-        );
 
         // convert m_cycles to t_cycles
         let t_cycles = (opcode_cycles + extra_cycles) * 4;

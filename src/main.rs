@@ -13,18 +13,19 @@ mod utils;
 use std::error::Error;
 
 use drivers::display::{Display, WHITE};
-use emulator::{rom::Rom, Emulator};
+use emulator::{debugger::DebugFlags, rom::Rom, Emulator};
 
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Init windows
     let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
-    let mut debug_window = Display::new("Tile Map", 16 * 8, 24 * 8, true)?;
+    let mut debug_window = Display::new("Tile Map", 128, 192, true)?;
 
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
-    let mut emulator = Emulator::new(None, Some(&mut debug_window));
+    let mut emulator = Emulator::new(vec![DebugFlags::DumpMemOnCrash, DebugFlags::ShowTileMap], Some(&mut debug_window));
 
     emulator.load_rom(test_rom)?;
 
@@ -55,7 +56,7 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new(None, None);
+        let mut emulator = Emulator::new(vec![], None);
         assert!(emulator._run_opcode_tests().unwrap());
     }
 }

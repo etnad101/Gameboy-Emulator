@@ -99,4 +99,8 @@ impl Display {
     pub fn set_background(&mut self, bg: Color) {
         self.background = bg;
     }
+
+    pub fn size(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
 }
