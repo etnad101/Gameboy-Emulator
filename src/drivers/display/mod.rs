@@ -23,7 +23,12 @@ pub struct Display {
 
 #[allow(dead_code)]
 impl Display {
-    pub fn new(title: &str, width: usize, height: usize, topmost: bool) -> Result<Self, minifb::Error> {
+    pub fn new(
+        title: &str,
+        width: usize,
+        height: usize,
+        topmost: bool,
+    ) -> Result<Self, minifb::Error> {
         let buffer: Vec<Color> = vec![0; width * height];
 
         let window_options = WindowOptions {

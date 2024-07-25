@@ -25,7 +25,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
-    let mut emulator = Emulator::new(vec![DebugFlags::DumpMemOnCrash, DebugFlags::ShowTileMap], Some(&mut debug_window));
+    let mut emulator = Emulator::new(
+        vec![DebugFlags::DumpMemOnCrash, DebugFlags::ShowTileMap],
+        Some(&mut debug_window),
+    );
 
     emulator.load_rom(test_rom)?;
 
@@ -41,7 +44,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 return Ok(());
             }
         };
-        emulator.update_debug_view();        
+        emulator.update_debug_view();
         emulator_window.clear();
         emulator_window.set_buffer(frame);
         emulator_window.render()?;

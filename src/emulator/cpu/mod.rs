@@ -536,7 +536,7 @@ impl<'a> Cpu<'a> {
         let shifted_out_bit = (data & (1 << 7)) >> 7;
         let new_val = (data << 1) | new_bit_0;
 
-        if prefixed && ( new_val == 0) {
+        if prefixed && (new_val == 0) {
             self.reg.set_z_flag()
         } else {
             self.reg.clear_z_flag()
@@ -550,7 +550,6 @@ impl<'a> Cpu<'a> {
         } else {
             self.reg.clear_c_flag();
         }
-
 
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => match reg {

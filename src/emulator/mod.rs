@@ -1,20 +1,20 @@
-pub mod rom;
-pub mod debugger;
 mod cpu;
+pub mod debugger;
 mod errors;
 mod memory;
 mod ppu;
+pub mod rom;
 mod test;
 
 use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
 
 use cpu::Cpu;
+use debugger::{DebugFlags, Debugger};
 use errors::EmulatorError;
 use memory::MemoryBus;
 use ppu::Ppu;
 use rom::Rom;
 use test::TestData;
-use debugger::{DebugFlags, Debugger};
 
 use crate::drivers::display::{Color, Display};
 
@@ -23,8 +23,6 @@ const CPU_FREQ: usize = 4_194_304; // T-cycles
 const DIV_FREQ: usize = 16_384;
 const MAX_CYCLES_PER_FRAME: usize = 70_224; // CPU_FREQ / FRAME_RATE
 const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
-
-
 
 pub enum LCDRegister {
     LCDC = 0xFF40,
@@ -152,7 +150,7 @@ impl<'a> Emulator<'a> {
             let correct_value = mem_state[1] as u8;
             let mem_value = self.memory.borrow().read_u8(addr);
 
-            if mem_value != correct_value && addr != 0xff04{
+            if mem_value != correct_value && addr != 0xff04 {
                 print!(
                     "addr: {}, val: {}, expected: {}",
                     addr, mem_value, correct_value

@@ -6,7 +6,6 @@ use crate::drivers::display::{Color, Display};
 
 use super::memory::MemoryBus;
 
-
 struct Tile {
     data: [u8; 64],
 }
@@ -86,7 +85,7 @@ impl<'a> Debugger<'a> {
 
     pub fn dump_mem(&self) {
         if (!self.active) || (!self.flags.contains(&DebugFlags::DumpMemOnCrash)) {
-            return
+            return;
         }
 
         let mut mem_log: String = String::new();
@@ -140,29 +139,27 @@ impl<'a> Debugger<'a> {
         let dt = Local::now();
         let native_utc = dt.naive_utc();
         let offset = *dt.offset();
-        let now =
-            DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
-        let log_name = "crash_log".to_string()
-            + &now.replace(" ", "_").replace(":", "-").replace(".", "_");
+        let now = DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
+        let log_name =
+            "crash_log".to_string() + &now.replace(' ', "_").replace(':', "-").replace('.', "_");
         if !Path::new("./logs/").exists() {
             fs::create_dir("./logs").expect("Unable to create log directory")
         };
         let path = "./logs/".to_string() + &log_name;
         fs::File::create(path.clone()).expect("unable to create file");
         fs::write(path, mem_log).expect("unable to write to file");
-        
     }
 
     pub fn render_tiles(&mut self) {
         if (!self.active) || (!self.flags.contains(&DebugFlags::ShowTileMap)) {
-            return
+            return;
         }
 
         match self.debug_window {
             Some(ref mut window) => {
                 let (length, width) = window.size();
                 // Check to see if window can hold tiles evenly without wrapping around or
-                // throwing a drawing error. Draw function expects to draw without wrapping 
+                // throwing a drawing error. Draw function expects to draw without wrapping
                 if (width % 8) != 0 || (length % 8) != 0 {
                     panic!("Width and height must be multiples of 8, 128x192 recomended")
                 }
@@ -175,12 +172,15 @@ impl<'a> Debugger<'a> {
                 window.clear();
                 let block_size: usize = 16 * 128 * 3;
                 let vram_start: usize = 0x8000;
-                let tile_data = self.memory.borrow().get_range(vram_start..vram_start + block_size).unwrap();
+                let tile_data = self
+                    .memory
+                    .borrow()
+                    .get_range(vram_start..vram_start + block_size)
+                    .unwrap();
                 let tiles = Tile::parse_tile_data(tile_data);
 
                 let mut tile_x = 0;
                 let mut tile_y = 0;
-
 
                 for tile in tiles {
                     let tile_data = tile.get_data();
@@ -209,7 +209,7 @@ impl<'a> Debugger<'a> {
                 }
                 window.render().unwrap();
             }
-            None => panic!("Must Provide window for tile map to be drawn to")
+            None => panic!("Must Provide window for tile map to be drawn to"),
         }
     }
     // TODO: Make function to change tile data based on num key pressed
