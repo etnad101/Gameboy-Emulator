@@ -9,7 +9,7 @@ pub struct MemoryBus {
 
 impl MemoryBus {
     pub fn new(size: usize) -> Self {
-        let mut memory: Vec<u8> = vec![0xFF; size + 1];
+        let memory: Vec<u8> = vec![0xFF; size + 1];
 
         MemoryBus {
             size,
@@ -59,7 +59,7 @@ impl MemoryBus {
 
     pub fn get_range(&self, range: Range<usize>) -> Result<Vec<u8>, MemError> {
         if range.end > self.size {
-            return Err(MemError::OutOfRange)
+            return Err(MemError::OutOfRange);
         }
         let bytes = self.bytes[range].to_owned();
 

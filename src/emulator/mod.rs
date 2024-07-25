@@ -4,17 +4,19 @@ mod memory;
 mod ppu;
 pub mod rom;
 mod test;
+mod debugger;
 
-use std::{error::Error, fs, io::Write};
+use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
 
 use cpu::Cpu;
-use errors::{CpuError, EmulatorError};
+use errors::EmulatorError;
 use memory::MemoryBus;
 use ppu::Ppu;
 use rom::Rom;
 use test::TestData;
+use debugger::{DebugMode, Debugger};
 
-use crate::drivers::display::Color;
+use crate::drivers::display::{Color, Display};
 
 const MEM_SIZE: usize = 0xFFFF;
 const CPU_FREQ: usize = 4_194_304; // T-cycles
@@ -22,10 +24,7 @@ const DIV_FREQ: usize = 16_384;
 const MAX_CYCLES_PER_FRAME: usize = 70_224; // CPU_FREQ / FRAME_RATE
 const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
 
-pub enum CpuDebugMode {
-    Memory,
-    Instructions,
-}
+
 
 pub enum LCDRegister {
     LCDC = 0xFF40,
@@ -47,31 +46,41 @@ enum Timer {
     TAC = 0xFF07,
 }
 
-pub struct Emulator {
-    cpu: Cpu,
-    ppu: Ppu,
-    memory: MemoryBus,
+pub struct Emulator<'a> {
+    cpu: Cpu<'a>,
+    ppu: Ppu<'a>,
+    memory: Rc<RefCell<MemoryBus>>,
+    debugger: Rc<RefCell<Debugger<'a>>>,
     timer_cycles: u32,
     frames: usize,
 }
 
-impl Emulator {
-    pub fn new(debug_mode: Option<CpuDebugMode>) -> Emulator {
-        let mut memory = MemoryBus::new(MEM_SIZE);
-        memory.load_rom(true, None).unwrap();
+impl<'a> Emulator<'a> {
+    pub fn new(debug_mode: Option<DebugMode>, debug_window: Option<&'a mut Display>) -> Self {
+        let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
+        memory_bus.borrow_mut().load_rom(true, None).unwrap();
+
+        let debugger = Rc::new(RefCell::new(Debugger::new(
+            debug_mode,
+            Rc::clone(&memory_bus),
+            debug_window,
+        )));
 
         Emulator {
-            cpu: Cpu::new(debug_mode),
-            ppu: Ppu::new(),
-            memory,
+            cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debugger)),
+            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debugger)),
+            memory: Rc::clone(&memory_bus),
+            debugger,
             timer_cycles: 0,
             frames: 0,
         }
     }
 
     pub fn load_rom(&mut self, rom: Rom) -> Result<(), Box<dyn Error>> {
-        return if rom.gb_compatible() {
-            self.memory.load_rom(false, Some(rom.bytes()))?;
+        if rom.gb_compatible() {
+            self.memory
+                .borrow_mut()
+                .load_rom(false, Some(rom.bytes()))?;
             Ok(())
         } else {
             Err(Box::new(EmulatorError::IncompatableRom))
@@ -82,8 +91,8 @@ impl Emulator {
         self.timer_cycles += cycles;
         if self.timer_cycles as usize >= DIV_UPDATE_FREQ {
             let addr = Timer::DIV as u16;
-            let div = self.memory.read_u8(addr);
-            self.memory.write_u8(addr, div);
+            let div = self.memory.borrow().read_u8(addr);
+            self.memory.borrow_mut().write_u8(addr, div);
             self.timer_cycles = 0;
         }
     }
@@ -97,14 +106,13 @@ impl Emulator {
         let mut cycles_this_frame = 0;
 
         while cycles_this_frame < MAX_CYCLES_PER_FRAME {
-            let cycles = self.cpu.execute_next_opcode(&mut self.memory)?;
+            let cycles = self.cpu.execute_next_opcode()?;
 
             cycles_this_frame += cycles;
 
             // self.update_timers(cycles);
 
-            self.ppu
-                .update_graphics(&mut self.memory, cycles);
+            self.ppu.update_graphics(cycles);
 
             // self.do_interrupts();
         }
@@ -112,13 +120,17 @@ impl Emulator {
         Ok(self.ppu.get_frame())
     }
 
+    pub fn update_debug_view(&mut self) {
+        self.debugger.borrow_mut().render_tiles();
+    }
+
     fn load_state(&mut self, test: &TestData) {
         self.cpu.load_state(&test.initial);
-        self.memory.clear();
-        for mem_state in test.initial.ram.to_owned() {
+        self.memory.borrow_mut().clear();
+        for mem_state in test.initial.ram.iter().cloned() {
             let addr = mem_state[0];
             let value = mem_state[1] as u8;
-            self.memory.write_u8(addr, value)
+            self.memory.borrow_mut().write_u8(addr, value)
         }
     }
 
@@ -135,19 +147,17 @@ impl Emulator {
             && sp == test.after.sp
             && pc == test.after.pc - 1;
 
-        for mem_state in test.after.ram.to_owned() {
+        for mem_state in test.after.ram.iter().cloned() {
             let addr = mem_state[0];
             let correct_value = mem_state[1] as u8;
-            let mem_value = self.memory.read_u8(addr);
+            let mem_value = self.memory.borrow().read_u8(addr);
 
-            if mem_value != correct_value {
-                if addr != 0xff04 {
-                    print!(
-                        "addr: {}, val: {}, expected: {}",
-                        addr, mem_value, correct_value
-                    );
-                    return false;
-                }
+            if mem_value != correct_value && addr != 0xff04{
+                print!(
+                    "addr: {}, val: {}, expected: {}",
+                    addr, mem_value, correct_value
+                );
+                return false;
             }
         }
 
@@ -208,7 +218,7 @@ impl Emulator {
                 current_test += 1;
                 std::io::stdout().flush().unwrap();
                 self.load_state(&test);
-                match self.cpu.execute_next_opcode(&mut self.memory) {
+                match self.cpu.execute_next_opcode() {
                     Ok(_) => (),
                     Err(e) => {
                         println!("{e}");
@@ -220,7 +230,7 @@ impl Emulator {
                     passed += 1;
                 } else {
                     all_passed = false;
-                    print!(" -> test {}\n", current_test);
+                    println!(" -> test {}", current_test);
                     std::io::stdout().flush()?;
                 }
             }

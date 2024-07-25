@@ -13,42 +13,41 @@ mod utils;
 use std::error::Error;
 
 use drivers::display::{Display, WHITE};
-use emulator::{
-    Emulator,
-    CpuDebugMode,
-    rom::Rom
-};
+use emulator::{rom::Rom, Emulator};
 
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let mut display = Display::new(SCREEN_WIDTH, SCREEN_HEIGHT)?;
+    let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
+    let mut debug_window = Display::new("Tile Map", 16 * 8, 24 * 8, true)?;
 
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
-    let mut emulator = Emulator::new(None);
+    let mut emulator = Emulator::new(None, Some(&mut debug_window));
 
-    // emulator.load_rom(test_rom)?;
+    emulator.load_rom(test_rom)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
-    display.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
-    display.set_background(WHITE);
+    emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
+    emulator_window.set_background(WHITE);
 
-    while display.is_open() {
+    while emulator_window.is_open() {
         let frame = match emulator.update() {
             Ok(frame) => frame,
-            Err(e) => {println!("{}", e); return Ok(())}
+            Err(e) => {
+                println!("{}", e);
+                return Ok(());
+            }
         };
-
-        display.clear();
-        display.set_buffer(frame);
-        display.render()?;
+        emulator.update_debug_view();        
+        emulator_window.clear();
+        emulator_window.set_buffer(frame);
+        emulator_window.render()?;
     }
 
     Ok(())
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -56,8 +55,7 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new(None);
+        let mut emulator = Emulator::new(None, None);
         assert!(emulator._run_opcode_tests().unwrap());
-        
     }
 }

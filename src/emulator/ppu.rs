@@ -1,10 +1,10 @@
-use std::error::Error;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-use super::errors::MemError;
 use super::memory::MemoryBus;
-use super::{LCDRegister, MAX_CYCLES_PER_FRAME};
+use super::{Debugger, LCDRegister};
 use crate::drivers::display::Color;
-use crate::{drivers::display::WHITE, SCREEN_HEIGHT, SCREEN_WIDTH, utils::GetBit};
+use crate::{drivers::display::WHITE, utils::GetBit, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const CYCLES_PER_SCANLINE: usize = 456;
 
@@ -19,7 +19,9 @@ enum PpuMode {
     DrawingPixels,
 }
 
-pub struct Ppu {
+pub struct Ppu<'a> {
+    memory: Rc<RefCell<MemoryBus>>,
+    debugger: Rc<RefCell<Debugger<'a>>>,
     buffer: Vec<Color>,
     mode: PpuMode,
     current_scanline_cycles: usize,
@@ -27,15 +29,29 @@ pub struct Ppu {
     hx: usize,
 }
 
-impl Ppu {
-    pub fn new() -> Ppu {
-        Ppu {
+impl<'a> Ppu<'a> {
+    pub fn new(memory: Rc<RefCell<MemoryBus>>, debugger: Rc<RefCell<Debugger<'a>>>) -> Self {
+        Self {
+            memory,
+            debugger,
             buffer: vec![WHITE; SCREEN_WIDTH * SCREEN_HEIGHT],
             mode: PpuMode::OAMScan,
             current_scanline_cycles: 0,
             fetcher_x: 0,
             hx: 0,
         }
+    }
+
+    fn write_mem_u8(&self, addr: u16, value: u8) {
+        self.memory.borrow_mut().write_u8(addr, value);
+    }
+
+    fn read_mem_u8(&self, addr: u16) -> u8 {
+        self.memory.borrow().read_u8(addr)
+    }
+
+    fn read_mem_u16(&self, addr: u16) -> u16 {
+        self.memory.borrow().read_u16(addr)
     }
 
     fn set_pixel(&mut self, x: usize, y: usize, color: Color) {
@@ -51,11 +67,11 @@ impl Ppu {
         self.buffer[index] = color;
     }
 
-    pub fn update_graphics(&mut self, memory: &mut MemoryBus, cycles: usize) {
-        let mut ly = memory.read_u8(LCDRegister::LY as u16);
-        let lcdc = memory.read_u8(LCDRegister::LCDC as u16);
-        let scy = memory.read_u8(LCDRegister::SCY as u16);
-        let scx = memory.read_u8(LCDRegister::SCX as u16);
+    pub fn update_graphics(&mut self, cycles: usize) {
+        let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
+        let lcdc = self.read_mem_u8(LCDRegister::LCDC as u16);
+        let scy = self.read_mem_u8(LCDRegister::SCY as u16);
+        let scx = self.read_mem_u8(LCDRegister::SCX as u16);
 
         self.current_scanline_cycles += cycles;
 
@@ -65,7 +81,7 @@ impl Ppu {
             if ly > 153 {
                 ly = 0;
             }
-            memory.write_u8(LCDRegister::LY as u16, ly);
+            self.write_mem_u8(LCDRegister::LY as u16, ly);
         }
 
         for _ in 0..(cycles / 2) {
@@ -81,21 +97,16 @@ impl Ppu {
 
             match self.mode {
                 PpuMode::DrawingPixels => {
-
                     // TODO: get tile number
-                    let tile_number_base: u16 = if lcdc.get_bit(3) == 1 {
-                        0x9C00
-                    } else {
-                        0x9800
-                    };
+                    let tile_number_base: u16 = if lcdc.get_bit(3) == 1 { 0x9C00 } else { 0x9800 };
 
                     let mut tile_number_offset: u16 = self.fetcher_x as u16;
                     if lcdc.get_bit(5) == 0 {
                         tile_number_offset += ((scx / 8) & 0x1F) as u16;
-                        tile_number_offset += 32 * (((ly as u16 + scy as u16) & 0xFF) / 8);
+                        tile_number_offset += 32 * ((((ly as u16 + scy as u16) & 0xFF) / 8) & 0x1F);
                     }
 
-                    let tile_number = memory.read_u8(tile_number_base + tile_number_offset);
+                    let tile_number = self.read_mem_u8(tile_number_base + tile_number_offset);
 
                     // get tile
                     let tile_offset = 2 * ((ly as u16 + scy as u16) % 8);
@@ -110,8 +121,8 @@ impl Ppu {
 
                     let tile_addr = tile_base + tile_offset;
 
-                    let lo_byte = memory.read_u8(tile_addr);
-                    let hi_byte = memory.read_u8(tile_addr + 1);
+                    let lo_byte = self.read_mem_u8(tile_addr);
+                    let hi_byte = self.read_mem_u8(tile_addr + 1);
 
                     for bit in (0..8).rev() {
                         let lo = ((lo_byte & (1 << bit)) >> bit) as u16;
@@ -136,7 +147,7 @@ impl Ppu {
                         self.fetcher_x = 0;
                     }
                 }
-                _ => ()
+                _ => (),
             }
         }
     }

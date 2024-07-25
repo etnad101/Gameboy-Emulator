@@ -23,7 +23,7 @@ pub struct Display {
 
 #[allow(dead_code)]
 impl Display {
-    pub fn new(width: usize, height: usize) -> Result<Self, minifb::Error> {
+    pub fn new(title: &str, width: usize, height: usize, topmost: bool) -> Result<Self, minifb::Error> {
         let buffer: Vec<Color> = vec![0; width * height];
 
         let window_options = WindowOptions {
@@ -32,12 +32,12 @@ impl Display {
             resize: false,
             scale: minifb::Scale::X4,
             scale_mode: minifb::ScaleMode::AspectRatioStretch,
-            topmost: true,
+            topmost,
             transparency: false,
             none: false,
         };
 
-        let window = Window::new("Gameboy Emulator", width, height, window_options)?;
+        let window = Window::new(title, width, height, window_options)?;
 
         Ok(Display {
             window,
