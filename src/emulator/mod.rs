@@ -222,7 +222,6 @@ impl<'a> Emulator<'a> {
                     Ok(_) => (),
                     Err(e) => {
                         println!("{e}");
-                        break;
                     }
                 }
 

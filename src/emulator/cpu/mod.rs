@@ -555,8 +555,9 @@ impl<'a> Cpu<'a> {
 
         let new_bit_0 = self.reg.get_c_flag();
         let shifted_out_bit = (data & (1 << 7)) >> 7;
+        let new_val = (data << 1) | new_bit_0;
 
-        if prefixed && shifted_out_bit == 0 {
+        if prefixed && ( new_val == 0) {
             self.reg.set_z_flag()
         } else {
             self.reg.clear_z_flag()
@@ -571,17 +572,16 @@ impl<'a> Cpu<'a> {
             self.reg.clear_c_flag();
         }
 
-        let new_val = (data << 1) | new_bit_0;
 
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => match reg {
                 Register::A => self.reg.a = new_val,
-                Register::B => self.reg.a = new_val,
-                Register::C => self.reg.a = new_val,
-                Register::D => self.reg.a = new_val,
-                Register::E => self.reg.a = new_val,
-                Register::H => self.reg.a = new_val,
-                Register::L => self.reg.a = new_val,
+                Register::B => self.reg.b = new_val,
+                Register::C => self.reg.c = new_val,
+                Register::D => self.reg.d = new_val,
+                Register::E => self.reg.e = new_val,
+                Register::H => self.reg.h = new_val,
+                Register::L => self.reg.l = new_val,
                 _ => self.crash(CpuError::OpcodeError(
                     "Should only rotate 8 bit values".to_string(),
                 ))?,
