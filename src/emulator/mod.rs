@@ -81,7 +81,7 @@ impl<'a> Emulator<'a> {
                 .load_rom(false, Some(rom.bytes()))?;
             Ok(())
         } else {
-            Err(Box::new(EmulatorError::IncompatableRom))
+            Err(Box::new(EmulatorError::IncompatibleRom))
         }
     }
 
@@ -195,6 +195,10 @@ impl<'a> Emulator<'a> {
     }
 
     // Test Code
+    pub fn dump_display_buffer(&mut self, buffer: &Vec<Color>) {
+        self.debugger.borrow_mut().dump_display_buffer(buffer);
+    }
+    
     pub fn _run_opcode_tests(&mut self) -> Result<bool, Box<dyn Error>> {
         let mut all_passed = true;
         let test_dir = fs::read_dir("./tests")?;

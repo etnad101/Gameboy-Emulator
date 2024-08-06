@@ -28,7 +28,7 @@ impl MemoryBus {
         } else {
             match p_rom {
                 Some(rom) => rom,
-                None => return Err(Box::new(EmulatorError::NoPrgmRom)),
+                None => return Err(Box::new(EmulatorError::NoProgramRom)),
             }
         };
 

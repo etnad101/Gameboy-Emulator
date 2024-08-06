@@ -64,15 +64,15 @@ impl std::error::Error for CpuError {}
 
 #[derive(Debug)]
 pub enum EmulatorError {
-    IncompatableRom,
-    NoPrgmRom,
+    IncompatibleRom,
+    NoProgramRom,
 }
 
 impl fmt::Display for EmulatorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EmulatorError::IncompatableRom => write!(f, "Selected rom is incompatable"),
-            EmulatorError::NoPrgmRom => write!(f, "No rom was given to the emulator"),
+            EmulatorError::IncompatibleRom => write!(f, "Selected rom is incompatible"),
+            EmulatorError::NoProgramRom => write!(f, "No rom was given to the emulator"),
         }
     }
 }

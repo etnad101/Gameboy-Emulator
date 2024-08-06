@@ -4,19 +4,28 @@ use std::rc::Rc;
 use super::memory::MemoryBus;
 use super::{Debugger, LCDRegister};
 use crate::drivers::display::Color;
+use crate::{COLOR_0, COLOR_1, COLOR_2, COLOR_3};
 use crate::{drivers::display::WHITE, utils::GetBit, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const CYCLES_PER_SCANLINE: usize = 456;
 
-struct Tile {
-    data: [u8; 64],
-}
-
 enum PpuMode {
-    Hblank,
-    Vblank,
+    HBlank,
+    VBlank,
     OAMScan,
     DrawingPixels,
+}
+
+struct Fetcher {
+    x: u8,
+}
+
+impl Fetcher {
+    pub fn new() -> Self {
+        Self {
+            x: 0,
+        }
+    }
 }
 
 pub struct Ppu<'a> {
@@ -62,7 +71,7 @@ impl<'a> Ppu<'a> {
         if y > SCREEN_HEIGHT {
             panic!("ERROR::PPU attempting to draw outside of buffer (height)")
         }
-
+        
         let index = (y * SCREEN_WIDTH) + x;
         self.buffer[index] = color;
     }
@@ -76,28 +85,27 @@ impl<'a> Ppu<'a> {
         self.current_scanline_cycles += cycles;
 
         if self.current_scanline_cycles >= CYCLES_PER_SCANLINE {
-            self.current_scanline_cycles = 0;
-            ly = ly.wrapping_add(1);
+                self.current_scanline_cycles = 0;
+                ly = ly.wrapping_add(1);
             if ly > 153 {
-                ly = 0;
+                    ly = 0;
+                }
+                self.write_mem_u8(LCDRegister::LY as u16, ly);
             }
-            self.write_mem_u8(LCDRegister::LY as u16, ly);
-        }
 
         for _ in 0..(cycles / 2) {
             self.mode = if ly >= 144 {
-                PpuMode::Vblank
+                PpuMode::VBlank
             } else if self.current_scanline_cycles <= 80 {
                 PpuMode::OAMScan
             } else if self.current_scanline_cycles <= 289 {
                 PpuMode::DrawingPixels
             } else {
-                PpuMode::Hblank
+                PpuMode::HBlank
             };
 
             match self.mode {
                 PpuMode::DrawingPixels => {
-                    // TODO: get tile number
                     let tile_number_base: u16 = if lcdc.get_bit(3) == 1 { 0x9C00 } else { 0x9800 };
 
                     let mut tile_number_offset: u16 = self.fetcher_x as u16;
@@ -129,10 +137,10 @@ impl<'a> Ppu<'a> {
                         let hi = ((hi_byte & (1 << bit)) >> bit) as u16;
                         let data: u8 = ((hi << 1) | lo) as u8;
                         let color: Color = match data {
-                            0 => 0x00FFFFFF,
-                            1 => 0x00BBBBBB,
-                            2 => 0x00777777,
-                            3 => 0x00000000,
+                            0 => COLOR_0,
+                            1 => COLOR_1,
+                            2 => COLOR_2,
+                            3 => COLOR_3,
                             _ => panic!("Should not have any other color here"),
                         };
                         self.set_pixel(self.hx, ly as usize, color);
