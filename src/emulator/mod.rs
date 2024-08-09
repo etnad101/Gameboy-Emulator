@@ -118,6 +118,15 @@ impl<'a> Emulator<'a> {
         Ok(self.ppu.get_frame())
     }
 
+    pub fn set_vram(&mut self, tile_num: u16) {
+        let base = 0x8000;
+        let tile = vec![0xFF, 0x00, 0x7E, 0xFF, 0x85, 0x81, 0x89, 0x83, 0x93, 0x85, 0xA5, 0x8B, 0xC9, 0x97, 0x7E, 0xFF];
+        for byte in 0..16 {
+            let addr = base + (tile_num * 16) + byte;
+            self.memory.borrow_mut().write_u8(addr, tile[byte as usize]);
+        }
+    }
+
     pub fn update_debug_view(&mut self) {
         self.debugger.borrow_mut().render_tiles();
     }
@@ -195,10 +204,6 @@ impl<'a> Emulator<'a> {
     }
 
     // Test Code
-    pub fn dump_display_buffer(&mut self, buffer: &Vec<Color>) {
-        self.debugger.borrow_mut().dump_display_buffer(buffer);
-    }
-    
     pub fn _run_opcode_tests(&mut self) -> Result<bool, Box<dyn Error>> {
         let mut all_passed = true;
         let test_dir = fs::read_dir("./tests")?;
