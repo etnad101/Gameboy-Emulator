@@ -2,7 +2,10 @@ use std::{cell::RefCell, fs, path::Path, rc::Rc};
 
 use chrono::{DateTime, Local};
 
-use crate::{drivers::display::{Color, Display}, COLOR_0, COLOR_1, COLOR_2, COLOR_3, SCREEN_WIDTH};
+use crate::{
+    drivers::display::{Color, Display},
+    COLOR_0, COLOR_1, COLOR_2, COLOR_3, SCREEN_WIDTH,
+};
 
 use super::memory::MemoryBus;
 
@@ -51,7 +54,6 @@ impl Tile {
 pub enum DebugFlags {
     ShowTileMap,
     DumpMemOnCrash,
-    DumpDisplayBufferOnCrash,
 }
 
 pub struct Debugger<'a> {
@@ -213,43 +215,4 @@ impl<'a> Debugger<'a> {
             None => panic!("Must Provide window for tile map to be drawn to"),
         }
     }
-
-    pub fn dump_display_buffer(&mut self, buffer: &Vec<Color>) {
-        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpDisplayBufferOnCrash)) {
-            return;
-        }
-
-        let mut display_buffer_dump: String = String::new();
-
-        let mut x = 0;
-        for i in buffer {
-            let color: u8 = match i {
-                &COLOR_0 => 0,
-                &COLOR_1 => 1,
-                &COLOR_2 => 2,
-                &COLOR_3 => 3,
-                _ => panic!("Display buffer should not have any other colour"),
-            };
-            display_buffer_dump.push_str(&format!("{}", color));
-            x += 1;
-            if x >= SCREEN_WIDTH {
-                display_buffer_dump.push_str("\n");
-                x = 0;
-            }
-        }
-
-        let dt = Local::now();
-        let native_utc = dt.naive_utc();
-        let offset = *dt.offset();
-        let now = DateTime::<Local>::from_naive_utc_and_offset(native_utc, offset).to_string();
-        let log_name =
-            "display_buffer_dump".to_string() + &now.replace(' ', "_").replace(':', "-").replace('.', "_");
-        if !Path::new("./logs/").exists() {
-            fs::create_dir("./logs").expect("Unable to create log directory")
-        };
-        let path = "./logs/".to_string() + &log_name;
-        fs::File::create(path.clone()).expect("unable to create file");
-        fs::write(path, display_buffer_dump).expect("unable to write to file");
-    }
-    // TODO: Make function to change tile data based on num key pressed
 }
