@@ -16,7 +16,7 @@ use ppu::Ppu;
 use rom::Rom;
 use test::TestData;
 
-use crate::drivers::display::{Color, Display};
+use crate::{drivers::display::{Color, Display}, Palette};
 
 const MEM_SIZE: usize = 0xFFFF;
 const CPU_FREQ: usize = 4_194_304; // T-cycles
@@ -54,7 +54,7 @@ pub struct Emulator<'a> {
 }
 
 impl<'a> Emulator<'a> {
-    pub fn new(debug_flags: Vec<DebugFlags>, debug_window: Option<&'a mut Display>) -> Self {
+    pub fn new(palette: Palette, debug_flags: Vec<DebugFlags>, debug_window: Option<&'a mut Display>) -> Self {
         let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
         memory_bus.borrow_mut().load_rom(true, None).unwrap();
 
@@ -62,11 +62,12 @@ impl<'a> Emulator<'a> {
             debug_flags,
             Rc::clone(&memory_bus),
             debug_window,
+            palette
         )));
 
         Emulator {
             cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debugger)),
-            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debugger)),
+            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debugger), palette),
             memory: Rc::clone(&memory_bus),
             debugger,
             timer_cycles: 0,

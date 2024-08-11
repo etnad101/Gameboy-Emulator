@@ -3,8 +3,7 @@ use std::{cell::RefCell, fs, path::Path, rc::Rc};
 use chrono::{DateTime, Local};
 
 use crate::{
-    drivers::display::{Color, Display},
-    COLOR_0, COLOR_1, COLOR_2, COLOR_3, SCREEN_WIDTH,
+    drivers::display::{Color, Display}, Palette,
 };
 
 use super::memory::MemoryBus;
@@ -61,6 +60,7 @@ pub struct Debugger<'a> {
     flags: Vec<DebugFlags>,
     debug_window: Option<&'a mut Display>,
     memory: Rc<RefCell<MemoryBus>>,
+    palette: Palette,
 }
 
 impl<'a> Debugger<'a> {
@@ -68,6 +68,7 @@ impl<'a> Debugger<'a> {
         flags: Vec<DebugFlags>,
         memory: Rc<RefCell<MemoryBus>>,
         debug_window: Option<&'a mut Display>,
+        palette: Palette,
     ) -> Self {
         let active = !flags.is_empty();
         Self {
@@ -75,6 +76,7 @@ impl<'a> Debugger<'a> {
             flags,
             debug_window,
             memory,
+            palette
         }
     }
 
@@ -191,10 +193,10 @@ impl<'a> Debugger<'a> {
                     let mut pixel_y = tile_y * 8;
                     for data in tile_data {
                         let color: Color = match data {
-                            0 => COLOR_0,
-                            1 => COLOR_1,
-                            2 => COLOR_2,
-                            3 => COLOR_3,
+                            0 => self.palette.c0,
+                            1 => self.palette.c1,
+                            2 => self.palette.c2,
+                            3 => self.palette.c3,
                             _ => panic!("Should not have any other color here"),
                         };
                         window.draw_pixel(pixel_x, pixel_y, color).unwrap();

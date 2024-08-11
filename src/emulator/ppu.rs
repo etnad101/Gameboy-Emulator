@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::memory::MemoryBus;
 use super::{Debugger, LCDRegister};
 use crate::drivers::display::Color;
-use crate::{COLOR_0, COLOR_1, COLOR_2, COLOR_3};
+use crate::Palette;
 use crate::{drivers::display::WHITE, utils::GetBit, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const CYCLES_PER_SCANLINE: usize = 456;
@@ -68,10 +68,11 @@ pub struct Ppu<'a> {
     hi_byte: u8,
     background_fifo: Fifo,
     object_fifo: Fifo,
+    palette: Palette,
 }
 
 impl<'a> Ppu<'a> {
-    pub fn new(memory: Rc<RefCell<MemoryBus>>, debugger: Rc<RefCell<Debugger<'a>>>) -> Self {
+    pub fn new(memory: Rc<RefCell<MemoryBus>>, debugger: Rc<RefCell<Debugger<'a>>>, palette: Palette) -> Self {
         memory.borrow_mut().write_u8(LCDRegister::LY as u16, 0);
         Self {
             memory,
@@ -88,6 +89,7 @@ impl<'a> Ppu<'a> {
             hi_byte: 0,
             background_fifo: Fifo::new(),
             object_fifo: Fifo::new(),
+            palette,
         }
     }
 
@@ -163,10 +165,10 @@ impl<'a> Ppu<'a> {
             let hi = ((self.hi_byte & (1 << bit)) >> bit) as u16;
             let data: u8 = ((hi << 1) | lo) as u8;
             let color: Color = match data {
-                0 => COLOR_0,
-                1 => COLOR_1,
-                2 => COLOR_2,
-                3 => COLOR_3,
+                0 => self.palette.c0,
+                1 => self.palette.c1,
+                2 => self.palette.c2,
+                3 => self.palette.c3,
                 _ => panic!("Should not have any other color here"),
             };
             self.background_fifo.push(color);

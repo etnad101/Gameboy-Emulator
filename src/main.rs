@@ -18,11 +18,23 @@ use emulator::{debugger::DebugFlags, rom::Rom, Emulator};
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
-// Palette Colors
-const COLOR_0: Color = 0x009BBC0F;
-const COLOR_1: Color = 0x008BAC0F;
-const COLOR_2: Color = 0x00306230;
-const COLOR_3: Color = 0x000F380F;
+const GREEN_PALETTE: Palette = Palette::new(0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
+const GRAY_PALETTE: Palette = Palette::new(0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
+
+#[derive(Clone, Copy)]
+struct Palette {
+    c0: Color,
+    c1: Color,
+    c2: Color,
+    c3: Color,
+}
+
+impl Palette {
+    pub const fn new(c0: Color, c1: Color, c2: Color, c3: Color) -> Self {
+        Self { c0, c1, c2, c3 }
+    }
+}
+
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Init windows
@@ -31,7 +43,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
-    let mut emulator = Emulator::new(vec![DebugFlags::ShowTileMap], Some(&mut debug_window));
+    let mut emulator = Emulator::new(GRAY_PALETTE, vec![DebugFlags::ShowTileMap], Some(&mut debug_window));
 
     emulator.load_rom(test_rom)?;
 
@@ -64,7 +76,7 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new(vec![], None);
+        let mut emulator = Emulator::new(GRAY_PALETTE, vec![], None);
         assert!(emulator._run_opcode_tests().unwrap());
     }
 }
