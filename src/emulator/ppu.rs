@@ -134,7 +134,7 @@ impl<'a> Ppu<'a> {
         let tile_map_addr = tile_map_base + self.fetcher_x as u16 + ((self.fetcher_y as u16 / 8) * 32);
         let tile_number = self.read_mem_u8(tile_map_addr) as u16;
 
-        let tile_addr_base = if lcdc.get_bit(4) == 1 {
+        let tile_addr = if lcdc.get_bit(4) == 1 {
             let base: u16 = 0x8000;
             base + (tile_number as u16 * 16)
         } else {
@@ -144,7 +144,7 @@ impl<'a> Ppu<'a> {
         };
 
         // Tile address
-        tile_addr_base + (tile_number * 16)
+        tile_addr
     }
     
     fn get_tile_data_low(&mut self) -> u8 {
