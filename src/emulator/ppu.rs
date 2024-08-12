@@ -41,7 +41,10 @@ impl Fifo {
     pub fn push(&mut self, pixel: Color) {
         if self.pixels.len() < self.max_size {
             self.pixels.push_front(pixel);
+        } else {
+            panic!("PPU::Not sure if I should panic here::Fifo can't hold more pixels")
         }
+        
     }
 
     pub fn pop(&mut self) -> Color {
