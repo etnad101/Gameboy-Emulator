@@ -35,7 +35,7 @@ impl Display {
             borderless: true,
             title: true,
             resize: false,
-            scale: minifb::Scale::X4,
+            scale: minifb::Scale::X2,
             scale_mode: minifb::ScaleMode::AspectRatioStretch,
             topmost,
             transparency: false,

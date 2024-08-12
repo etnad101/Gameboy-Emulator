@@ -16,7 +16,10 @@ use ppu::Ppu;
 use rom::Rom;
 use test::TestData;
 
-use crate::{drivers::display::{Color, Display}, Palette};
+use crate::{
+    drivers::display::{Color, Display},
+    Palette,
+};
 
 const MEM_SIZE: usize = 0xFFFF;
 const CPU_FREQ: usize = 4_194_304; // T-cycles
@@ -54,7 +57,11 @@ pub struct Emulator<'a> {
 }
 
 impl<'a> Emulator<'a> {
-    pub fn new(palette: Palette, debug_flags: Vec<DebugFlags>, debug_window: Option<&'a mut Display>) -> Self {
+    pub fn new(
+        palette: Palette,
+        debug_flags: Vec<DebugFlags>,
+        debug_window: Option<&'a mut Display>,
+    ) -> Self {
         let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
         memory_bus.borrow_mut().load_rom(true, None).unwrap();
 
@@ -62,7 +69,7 @@ impl<'a> Emulator<'a> {
             debug_flags,
             Rc::clone(&memory_bus),
             debug_window,
-            palette
+            palette,
         )));
 
         Emulator {
@@ -121,7 +128,10 @@ impl<'a> Emulator<'a> {
 
     pub fn set_vram(&mut self, tile_num: u16) {
         let base = 0x8000;
-        let tile = vec![0xFF, 0x00, 0x7E, 0xFF, 0x85, 0x81, 0x89, 0x83, 0x93, 0x85, 0xA5, 0x8B, 0xC9, 0x97, 0x7E, 0xFF];
+        let tile = vec![
+            0xFF, 0x00, 0x7E, 0xFF, 0x85, 0x81, 0x89, 0x83, 0x93, 0x85, 0xA5, 0x8B, 0xC9, 0x97,
+            0x7E, 0xFF,
+        ];
         for byte in 0..16 {
             let addr = base + (tile_num * 16) + byte;
             self.memory.borrow_mut().write_u8(addr, tile[byte as usize]);

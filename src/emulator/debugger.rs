@@ -3,7 +3,8 @@ use std::{cell::RefCell, fs, path::Path, rc::Rc};
 use chrono::{DateTime, Local};
 
 use crate::{
-    drivers::display::{Color, Display}, Palette,
+    drivers::display::{Color, Display},
+    Palette,
 };
 
 use super::memory::MemoryBus;
@@ -76,7 +77,7 @@ impl<'a> Debugger<'a> {
             flags,
             debug_window,
             memory,
-            palette
+            palette,
         }
     }
 

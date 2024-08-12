@@ -35,7 +35,6 @@ impl Palette {
     }
 }
 
-
 fn main() -> Result<(), Box<dyn Error>> {
     // Init windows
     let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
@@ -43,18 +42,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
 
-    let mut emulator = Emulator::new(GRAY_PALETTE, vec![DebugFlags::ShowTileMap], Some(&mut debug_window));
+    let mut emulator = Emulator::new(
+        GRAY_PALETTE,
+        vec![DebugFlags::ShowTileMap],
+        Some(&mut debug_window),
+    );
 
-    emulator.load_rom(test_rom)?;
+    // emulator.load_rom(test_rom)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
     emulator_window.set_background(WHITE);
     while emulator_window.is_open() {
         let frame = match emulator.update() {
-            Ok(frame) => {
-                frame
-            }
+            Ok(frame) => frame,
             Err(e) => {
                 println!("{}", e);
                 return Ok(());
@@ -64,7 +65,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         emulator_window.clear();
         emulator_window.set_buffer(frame);
         emulator_window.render()?;
-
     }
 
     Ok(())

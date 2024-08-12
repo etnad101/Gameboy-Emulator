@@ -33,8 +33,8 @@ struct Fifo {
 impl Fifo {
     pub fn new() -> Self {
         Self {
-           pixels: VecDeque::new(), 
-           max_size: 16,
+            pixels: VecDeque::new(),
+            max_size: 16,
         }
     }
 
@@ -58,37 +58,45 @@ pub struct Ppu<'a> {
     debugger: Rc<RefCell<Debugger<'a>>>,
     buffer: Vec<Color>,
     mode: PpuMode,
-    current_scanline_dots: usize,
+    current_scanline_cycles: usize,
     fetcher_mode: FetcherMode,
     fetcher_x: u8,
     fetcher_y: u8,
     scanline_x: u8,
+    tile_number: u8,
     tile_addr: u16,
     lo_byte: u8,
     hi_byte: u8,
     background_fifo: Fifo,
     object_fifo: Fifo,
+    scanline_has_reset: bool,
     palette: Palette,
 }
 
 impl<'a> Ppu<'a> {
-    pub fn new(memory: Rc<RefCell<MemoryBus>>, debugger: Rc<RefCell<Debugger<'a>>>, palette: Palette) -> Self {
+    pub fn new(
+        memory: Rc<RefCell<MemoryBus>>,
+        debugger: Rc<RefCell<Debugger<'a>>>,
+        palette: Palette,
+    ) -> Self {
         memory.borrow_mut().write_u8(LCDRegister::LY as u16, 0);
         Self {
             memory,
             debugger,
             buffer: vec![WHITE; SCREEN_WIDTH * SCREEN_HEIGHT],
             mode: PpuMode::OAMScan,
-            current_scanline_dots: 0,
+            current_scanline_cycles: 0,
             fetcher_mode: FetcherMode::GetTile,
             fetcher_x: 0,
             fetcher_y: 0,
             scanline_x: 0,
+            tile_number: 0,
             tile_addr: 0,
             lo_byte: 0,
             hi_byte: 0,
             background_fifo: Fifo::new(),
             object_fifo: Fifo::new(),
+            scanline_has_reset: false,
             palette,
         }
     }
@@ -101,10 +109,6 @@ impl<'a> Ppu<'a> {
         self.memory.borrow().read_u8(addr)
     }
 
-    fn read_mem_u16(&self, addr: u16) -> u16 {
-        self.memory.borrow().read_u16(addr)
-    }
-
     fn set_pixel(&mut self, x: usize, y: usize, color: Color) {
         if x > SCREEN_WIDTH {
             panic!("ERROR::PPU attempting to draw outside of buffer (width)")
@@ -113,49 +117,35 @@ impl<'a> Ppu<'a> {
         if y > SCREEN_HEIGHT {
             panic!("ERROR::PPU attempting to draw outside of buffer (height)")
         }
-        
+
         let index = (y * SCREEN_WIDTH) + x;
         self.buffer[index] = color;
     }
 
-    fn get_tile(&mut self) -> u16 {
+    fn get_tile_number(&mut self) -> u8 {
         let lcdc = self.read_mem_u8(LCDRegister::LCDC as u16);
-        let ly = self.read_mem_u8(LCDRegister::LY as u16);
-        let scx = self.read_mem_u8(LCDRegister::SCX as u16);
-        let scy = self.read_mem_u8(LCDRegister::SCY as u16);
+        let ly = self.read_mem_u8(LCDRegister::LY as u16) as u16;
+        let scx = self.read_mem_u8(LCDRegister::SCX as u16) as u16;
+        let scy = self.read_mem_u8(LCDRegister::SCY as u16) as u16;
 
-        // Check to see if current tile is a window tile or not
-        if lcdc.get_bit(5) == 0 {
-            self.fetcher_x = ((scx / 8) + self.scanline_x) & 0x1F;
-            self.fetcher_y = (ly + scy) & 0xFF;
-        } else {
-            // If window tile, use x and y coord for window tile
-        }
+        let mut tile_num_addr: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
+        tile_num_addr += self.fetcher_x as u16;
+        tile_num_addr += (scx / 8) & 0x1f;
+        tile_num_addr += 32 * (((ly + scy) & 0xFF) / 8);
 
-        let tile_map_base: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
-        let tile_map_addr = tile_map_base + self.fetcher_x as u16 + ((self.fetcher_y as u16 / 8) * 32);
-        let tile_number = self.read_mem_u8(tile_map_addr) as u16;
-
-        let tile_addr = if lcdc.get_bit(4) == 1 {
-            let base: u16 = 0x8000;
-            base + (tile_number as u16 * 16)
-        } else {
-            let base: isize = 0x9000;
-            let offset: isize = tile_number as isize * 16;
-            (base + offset) as u16
-        };
-
-        // Tile address
-        tile_addr
+        self.read_mem_u8(tile_num_addr)
     }
-    
+
     fn get_tile_data_low(&mut self) -> u8 {
-        self.tile_addr += 2 * (self.fetcher_y as u16 % 8);
+        let ly = self.read_mem_u8(LCDRegister::LY as u16) as u16;
+        let scy = self.read_mem_u8(LCDRegister::SCY as u16) as u16;
+
+        self.tile_addr = 0x8000 + (16 * self.tile_number as u16);
+        self.tile_addr += 2 * ((ly + scy) % 8);
         self.read_mem_u8(self.tile_addr)
     }
 
     fn get_tile_data_high(&mut self) -> u8 {
-        self.tile_addr += 2 * (self.fetcher_y as u16 % 8);
         self.read_mem_u8(self.tile_addr + 1)
     }
 
@@ -173,21 +163,24 @@ impl<'a> Ppu<'a> {
             };
             self.background_fifo.push(color);
         }
+        self.fetcher_x += 1;
+        if self.fetcher_x >= 32 {
+            self.fetcher_x = 0;
+        }
     }
 
     pub fn update_graphics(&mut self, cycles: usize) {
         let lcdc = self.read_mem_u8(LCDRegister::LCDC as u16);
         if lcdc.get_bit(7) == 0 {
-            return
+            return;
         }
 
-        self.current_scanline_dots += cycles;
+        self.current_scanline_cycles += cycles;
 
         for i in 0..cycles {
-            let ly = self.read_mem_u8(LCDRegister::LY as u16);
             match self.mode {
                 PpuMode::OAMScan => {
-                    if self.current_scanline_dots >= 80 {
+                    if self.current_scanline_cycles >= 80 {
                         self.mode = PpuMode::DrawingPixels;
                     }
                 }
@@ -195,7 +188,7 @@ impl<'a> Ppu<'a> {
                     if i % 2 == 0 {
                         match self.fetcher_mode {
                             FetcherMode::GetTile => {
-                                self.tile_addr = self.get_tile();
+                                self.tile_number = self.get_tile_number();
                                 self.fetcher_mode = FetcherMode::TileDataLow;
                             }
                             FetcherMode::TileDataLow => {
@@ -204,13 +197,18 @@ impl<'a> Ppu<'a> {
                             }
                             FetcherMode::TileDataHigh => {
                                 self.hi_byte = self.get_tile_data_high();
-                                self.fetcher_mode = FetcherMode::Push
+                                if !self.scanline_has_reset {
+                                    self.fetcher_mode = FetcherMode::GetTile;
+                                    self.scanline_has_reset = true;
+                                } else {
+                                    self.fetcher_mode = FetcherMode::Push
+                                }
                             }
                             FetcherMode::Push => {
                                 self.push_to_fifo();
                                 self.fetcher_mode = FetcherMode::GetTile;
                             }
-                            FetcherMode::Sleep => ()
+                            FetcherMode::Sleep => (),
                         }
                     }
 
@@ -222,13 +220,14 @@ impl<'a> Ppu<'a> {
                     }
 
                     if self.scanline_x >= 160 {
-                        self.scanline_x = 0;
                         self.mode = PpuMode::HBlank;
                     }
                 }
                 PpuMode::HBlank => {
-                    if self.current_scanline_dots >= 456 {
-                        self.current_scanline_dots = 0;
+                    if self.current_scanline_cycles >= 456 {
+                        self.scanline_has_reset = false;
+                        self.scanline_x = 0;
+                        self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
                         ly = ly.wrapping_add(1);
                         self.write_mem_u8(LCDRegister::LY as u16, ly);
@@ -240,8 +239,8 @@ impl<'a> Ppu<'a> {
                     }
                 }
                 PpuMode::VBlank => {
-                    if self.current_scanline_dots >= 456 {
-                        self.current_scanline_dots = 0;
+                    if self.current_scanline_cycles >= 456 {
+                        self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
                         ly = ly.wrapping_add(1);
                         self.write_mem_u8(LCDRegister::LY as u16, ly);
