@@ -5,6 +5,7 @@ use super::errors::{EmulatorError, MemError};
 pub struct MemoryBus {
     size: usize,
     bytes: Vec<u8>,
+    cutoff_rom: Vec<u8>,
 }
 
 impl MemoryBus {
@@ -14,6 +15,7 @@ impl MemoryBus {
         MemoryBus {
             size,
             bytes: memory,
+            cutoff_rom: Vec::new(),
         }
     }
 
@@ -32,17 +34,22 @@ impl MemoryBus {
             }
         };
 
-        // Temporary size limit until I set up MBCs, so I can load a rom to get the boot screen
-        let mut len = if rom.len() > 0x200 { 0x200 } else { rom.len() };
+        let rom_size = rom.len();
+        println!("rom size: {:#06x}", rom_size);
 
-        let mut start_addr: usize = 0;
+        let mut start_addr = 0;
+
         if !boot_rom {
             start_addr = 0x100;
-            len += 0x100;
+            self.cutoff_rom = rom[0..0x100].to_owned();
         }
+        self.bytes[start_addr..rom_size].copy_from_slice(&rom[start_addr..rom_size]);
 
-        self.bytes[start_addr..len].copy_from_slice(&rom[start_addr..len]);
         Ok(())
+    }
+
+    fn unmap_boot_rom(&mut self) {
+        self.bytes[0..0x100].copy_from_slice(&self.cutoff_rom[0..0x100]);
     }
 
     pub fn clear(&mut self) {
@@ -69,6 +76,9 @@ impl MemoryBus {
     pub fn write_u8(&mut self, addr: u16, value: u8) {
         // TODO: implement Echo RAM and range checks
         let mut value = value;
+        if addr == 0xff50 {
+            self.unmap_boot_rom()
+        }
         if addr == 0xFF04 {
             value = 0;
         }

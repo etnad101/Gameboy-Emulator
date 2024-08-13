@@ -38,17 +38,13 @@ impl Palette {
 fn main() -> Result<(), Box<dyn Error>> {
     // Init windows
     let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
-    let mut debug_window = Display::new("Tile Map", 128, 192, true)?;
+    // let mut debug_window = Display::new("Tile Map", 128, 192, true)?;
 
-    let test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?;
+    let test_rom = Rom::from("./roms/tests/dmg-acid2.gb")?;
 
-    let mut emulator = Emulator::new(
-        GRAY_PALETTE,
-        vec![DebugFlags::ShowTileMap],
-        Some(&mut debug_window),
-    );
+    let mut emulator = Emulator::new(GRAY_PALETTE, vec![DebugFlags::DumpMemOnCrash], None);
 
-    // emulator.load_rom(test_rom)?;
+    emulator.load_rom(test_rom)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));

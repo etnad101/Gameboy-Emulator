@@ -111,11 +111,14 @@ impl Opcode {
             Opcode::new(0x18, "JR, e8".to_string(), 2, 3, AddressingMode::None, AddressingMode::ImmediateI8),
             Opcode::new(0x20, "JR NZ, e8".to_string(), 2, 2 /* + 1 if taken */, AddressingMode::None, AddressingMode::ImmediateI8),
             Opcode::new(0x28, "JR Z, e8".to_string(), 2, 2 /* + 1 if taken */, AddressingMode::None, AddressingMode::ImmediateI8),
+            Opcode::new(0xc3, "JP a16".to_string(), 3, 4, AddressingMode::AddressU16, AddressingMode::None),
             Opcode::new(0xc9, "RET".to_string(), 1, 4, AddressingMode::None, AddressingMode::None),
             Opcode::new(0xcd, "CALL a16".to_string(), 3 ,6, AddressingMode::AddressU16, AddressingMode::None),
             // Stack
             Opcode::new(0xc1, "POP BC".to_string(), 1, 4, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::None),
             Opcode::new(0xc5, "PUSH BC".to_string(), 1, 4, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::None),
+            // Interupts
+            Opcode::new(0xf3, "DI".to_string(), 1, 1, AddressingMode::None, AddressingMode::None),
         ];
 
         let mut map = HashMap::new();

@@ -44,7 +44,6 @@ impl Fifo {
         } else {
             panic!("PPU::Not sure if I should panic here::Fifo can't hold more pixels")
         }
-        
     }
 
     pub fn pop(&mut self) -> Color {
@@ -53,6 +52,10 @@ impl Fifo {
 
     pub fn len(&self) -> usize {
         self.pixels.len()
+    }
+
+    pub fn clear(&mut self) {
+        self.pixels.clear();
     }
 }
 
@@ -178,9 +181,8 @@ impl<'a> Ppu<'a> {
             return;
         }
 
-        self.current_scanline_cycles += cycles;
-
         for i in 0..cycles {
+            self.current_scanline_cycles += 1;
             match self.mode {
                 PpuMode::OAMScan => {
                     if self.current_scanline_cycles >= 80 {
@@ -188,7 +190,7 @@ impl<'a> Ppu<'a> {
                     }
                 }
                 PpuMode::DrawingPixels => {
-                    if i % 2 == 0 {
+                    if i % 2 == 1 {
                         match self.fetcher_mode {
                             FetcherMode::GetTile => {
                                 self.tile_number = self.get_tile_number();

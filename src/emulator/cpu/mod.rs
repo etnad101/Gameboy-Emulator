@@ -37,6 +37,7 @@ pub struct Cpu<'a> {
     reg: Registers,
     sp: u16,
     pc: u16,
+    ime: bool,
     normal_opcodes: HashMap<u8, Opcode>,
     prefixed_opcodes: HashMap<u8, Opcode>,
     memory: Rc<RefCell<MemoryBus>>,
@@ -49,6 +50,7 @@ impl<'a> Cpu<'a> {
             reg: Registers::new(),
             sp: 0,
             pc: 0,
+            ime: false,
             normal_opcodes: Opcode::generate_normal_opcode_map(),
             prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
             memory,
@@ -390,7 +392,7 @@ impl<'a> Cpu<'a> {
         Ok(())
     }
 
-    fn reljump(
+    fn rel_jump(
         &mut self,
         addressing_mode: &AddressingMode,
         condition: JumpCondition,
@@ -441,6 +443,22 @@ impl<'a> Cpu<'a> {
         }
 
         Ok(extra_cycles)
+    }
+
+    fn abs_jump(&mut self, addressing_mode: &AddressingMode) -> Result<(), CpuError> {
+        let addr = match self.get_data(addressing_mode) {
+            DataType::Address(addr) => addr,
+            _ => {
+                return {
+                    self.crash(CpuError::OpcodeError(
+                        ("Should only have an address here".to_string()),
+                    ))
+                }
+            }
+        };
+
+        self.pc = addr;
+        Ok(())
     }
 
     fn call(&mut self, addressing_mode: &AddressingMode) -> Result<(), CpuError> {
@@ -724,7 +742,9 @@ impl<'a> Cpu<'a> {
         // Execute instruction
         let mut skip_pc_increase = false;
         let mut extra_cycles: usize = 0;
-
+        if self.pc >= 0x150 {
+            println!("addr: {}, opcode: {}", self.pc, opcode_asm)
+        }
         if prefixed {
             code = self.read_mem_u8(self.pc + 1);
             match code {
@@ -745,11 +765,15 @@ impl<'a> Cpu<'a> {
                 0x22 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::IncHL)?,
                 0x32 => self.load_or_store_value(&lhs, &rhs, StoreLoadModifier::DecHL)?,
                 0x17 => self.rotate_left_through_carry(&lhs, false)?,
-                0x18 => extra_cycles = self.reljump(&rhs, JumpCondition::None)?,
-                0x20 => extra_cycles = self.reljump(&rhs, JumpCondition::NZ)?,
-                0x28 => extra_cycles = self.reljump(&rhs, JumpCondition::Z)?,
+                0x18 => extra_cycles = self.rel_jump(&rhs, JumpCondition::None)?,
+                0x20 => extra_cycles = self.rel_jump(&rhs, JumpCondition::NZ)?,
+                0x28 => extra_cycles = self.rel_jump(&rhs, JumpCondition::Z)?,
                 0x86 => self.add_a(&lhs, &rhs)?,
                 0xc1 => self.pop_stack_instr(&lhs)?,
+                0xc3 => {
+                    skip_pc_increase = true;
+                    self.abs_jump(&lhs)?
+                }
                 0xc5 => self.push_stack_instr(&lhs)?,
                 0xc9 => {
                     skip_pc_increase = true;
@@ -762,6 +786,7 @@ impl<'a> Cpu<'a> {
                 0x90 => self.sub_a(&rhs, true)?,
                 0xaf => self.xor_with_a(&rhs)?,
                 0xbe | 0xfe => self.sub_a(&rhs, false)?,
+                0xf3 => self.ime = false,
                 _ => self.crash(CpuError::OpcodeNotImplemented(code, false))?,
             };
         };
