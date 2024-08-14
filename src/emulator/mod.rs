@@ -142,7 +142,7 @@ impl<'a> Emulator<'a> {
         self.debugger.borrow_mut().render_tiles();
     }
 
-    fn load_state(&mut self, test: &TestData) {
+    fn _load_state(&mut self, test: &TestData) {
         self.cpu.load_state(&test.initial);
         self.memory.borrow_mut().clear();
         for mem_state in test.initial.ram.iter().cloned() {
@@ -152,7 +152,7 @@ impl<'a> Emulator<'a> {
         }
     }
 
-    fn check_state(&self, test: &TestData) -> bool {
+    fn _check_state(&self, test: &TestData) -> bool {
         let (a, b, c, d, e, f, h, l, sp, pc) = self.cpu.get_state();
         let equal = a == test.after.a
             && b == test.after.b
@@ -221,7 +221,6 @@ impl<'a> Emulator<'a> {
         for file in test_dir {
             let path = file?.path();
             // TODO: add check to make sure file is valid test
-
             let data = fs::read_to_string(path).unwrap();
 
             let test_data: Vec<TestData> = serde_json::from_str(&data).unwrap();
@@ -235,7 +234,7 @@ impl<'a> Emulator<'a> {
             for test in test_data {
                 current_test += 1;
                 std::io::stdout().flush().unwrap();
-                self.load_state(&test);
+                self._load_state(&test);
                 match self.cpu.execute_next_opcode() {
                     Ok(_) => (),
                     Err(e) => {
@@ -243,7 +242,7 @@ impl<'a> Emulator<'a> {
                     }
                 }
 
-                if self.check_state(&test) {
+                if self._check_state(&test) {
                     passed += 1;
                 } else {
                     all_passed = false;

@@ -35,7 +35,6 @@ impl MemoryBus {
         };
 
         let rom_size = rom.len();
-        println!("rom size: {:#06x}", rom_size);
 
         let mut start_addr = 0;
 
@@ -76,7 +75,7 @@ impl MemoryBus {
     pub fn write_u8(&mut self, addr: u16, value: u8) {
         // TODO: implement Echo RAM and range checks
         let mut value = value;
-        if addr == 0xff50 {
+        if addr == 0xff50 && self.cutoff_rom.len() > 0 {
             self.unmap_boot_rom()
         }
         if addr == 0xFF04 {

@@ -1,4 +1,4 @@
-use crate::emulator::cpu::GetBit;
+use crate::emulator::cpu::BitOps;
 
 pub struct Registers {
     pub a: u8,
@@ -63,11 +63,11 @@ impl Registers {
     }
 
     pub fn set_z_flag(&mut self) {
-        self.f |= 1 << 7;
+        self.f.set_bit(7);
     }
 
     pub fn clear_z_flag(&mut self) {
-        self.f &= !(1 << 7);
+        self.f.clear_bit(7);
     }
 
     pub fn get_z_flag(&self) -> u8 {
@@ -75,11 +75,11 @@ impl Registers {
     }
 
     pub fn set_n_flag(&mut self) {
-        self.f |= 1 << 6;
+        self.f.set_bit(6)
     }
 
     pub fn clear_n_flag(&mut self) {
-        self.f &= !(1 << 6);
+        self.f.clear_bit(6)
     }
 
     pub fn get_n_flag(&self) -> u8 {
@@ -87,11 +87,11 @@ impl Registers {
     }
 
     pub fn set_h_flag(&mut self) {
-        self.f |= 1 << 5;
+        self.f.set_bit(5)
     }
 
     pub fn clear_h_flag(&mut self) {
-        self.f &= !(1 << 5);
+        self.f.clear_bit(5)
     }
 
     pub fn get_h_flag(&self) -> u8 {
@@ -99,11 +99,11 @@ impl Registers {
     }
 
     pub fn set_c_flag(&mut self) {
-        self.f |= 1 << 4;
+        self.f.set_bit(4);
     }
 
     pub fn clear_c_flag(&mut self) {
-        self.f &= !(1 << 4);
+        self.f.clear_bit(4)
     }
 
     pub fn get_c_flag(&self) -> u8 {

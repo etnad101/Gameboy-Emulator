@@ -6,7 +6,7 @@ use super::memory::MemoryBus;
 use super::{Debugger, LCDRegister};
 use crate::drivers::display::Color;
 use crate::Palette;
-use crate::{drivers::display::WHITE, utils::GetBit, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::{drivers::display::WHITE, utils::BitOps, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const CYCLES_PER_SCANLINE: usize = 456;
 
