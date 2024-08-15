@@ -38,11 +38,11 @@ impl Palette {
 fn main() -> Result<(), Box<dyn Error>> {
     // Init windows
     let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
-    // let mut debug_window = Display::new("Tile Map", 128, 192, true)?;
+    let mut debug_window = Display::new("Tile Map", 128, 192, true)?;
 
     let test_rom = Rom::from("./roms/tests/dmg-acid2.gb")?;
 
-    let mut emulator = Emulator::new(GRAY_PALETTE, vec![DebugFlags::DumpMemOnCrash], None);
+    let mut emulator = Emulator::new(GRAY_PALETTE, vec![DebugFlags::DumpMemOnCrash, DebugFlags::ShowTileMap], Some(&mut debug_window));
 
     emulator.load_rom(test_rom)?;
 

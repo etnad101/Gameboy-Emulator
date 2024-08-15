@@ -181,7 +181,7 @@ impl<'a> Emulator<'a> {
 
         if !equal {
             println!(
-                " Initial: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                " Initial: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
                 test.initial.a,
                 test.initial.b,
                 test.initial.c,
@@ -194,11 +194,11 @@ impl<'a> Emulator<'a> {
                 test.initial.pc - 1
             );
             println!(
-                "  Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                "  Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
                 a, b, c, d, e, f, h, l, sp, pc
             );
             println!(
-                "Expected: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, f: {:#010b}, h: {:#04x}, l: {:#04x}, sp: {:#06x}, pc: {:#06x}",
+                "Expected: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
                 test.after.a,
                 test.after.b,
                 test.after.c,
