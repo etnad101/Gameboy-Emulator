@@ -525,6 +525,59 @@ impl<'a> Cpu<'a> {
         }
     }
 
+    fn rotate_right(&mut self, addressing_mode: &AddressingMode, prefixed: bool, through_carry: bool) {
+        let data = match self.get_data(addressing_mode) {
+            DataType::ValueU8(value) => value,
+            DataType::Address(addr) => self.read_mem_u8(addr),
+            _ => panic!("Expected u8 value here"),
+        };
+
+        let shifted_out_bit = data.get_bit(0);
+        let new_val = if through_carry {
+            (data >> 1) | self.reg.get_c_flag()
+        } else {
+            (data >> 1) | shifted_out_bit
+        };
+
+
+        if prefixed && (new_val == 0) {
+            self.reg.set_z_flag()
+        } else {
+            self.reg.clear_z_flag()
+        }
+
+        self.reg.clear_n_flag();
+        self.reg.clear_h_flag();
+
+        if shifted_out_bit == 1 {
+            self.reg.set_c_flag();
+        } else {
+            self.reg.clear_c_flag();
+        }
+
+        match addressing_mode {
+            AddressingMode::ImmediateRegister(reg) => match reg {
+                Register::A => self.reg.a = new_val,
+                Register::B => self.reg.b = new_val,
+                Register::C => self.reg.c = new_val,
+                Register::D => self.reg.d = new_val,
+                Register::E => self.reg.e = new_val,
+                Register::H => self.reg.h = new_val,
+                Register::L => self.reg.l = new_val,
+                _ => panic!("Should only rotate 8 bit values"),
+            },
+            AddressingMode::AddressRegister(_) => {
+                let addr = match self.get_data(addressing_mode) {
+                    DataType::Address(addr) => addr,
+                    _ => panic!("Expected addr value here"),
+                };
+
+                self.write_mem_u8(addr, new_val);
+            }
+            _ => panic!("Should only have r8 or address register"),
+        }
+    }
+
     fn set_u8_add_registers(&mut self, sum: u8, half_carry: bool, full_carry: bool) {
         if sum == 0 {
             self.reg.set_z_flag();
@@ -559,6 +612,87 @@ impl<'a> Cpu<'a> {
         let (sum, half_carry, full_carry) = self.carry_track_add_u8(self.reg.a, value);
 
         self.set_u8_add_registers(sum, half_carry, full_carry);
+    }
+
+    fn add_hl_u16(&mut self, rhs: &AddressingMode) {
+        let value = match self.get_data(rhs) {
+            DataType::ValueU16(val) => val,
+            _ => panic!("Should only have a u16 value here"),
+        };
+
+        let hl = self.reg.hl();
+        let (res, carry) = hl.overflowing_add(value);
+        let half_carry = (((hl & 0xFFF) + (value & 0xFFF)) & 0x1000) == 0x1000;
+
+        self.reg.set_hl(res);
+
+        self.reg.clear_n_flag();
+        
+        if half_carry {
+            self.reg.set_h_flag();
+        } else {
+            self.reg.clear_h_flag();
+        }
+
+        if carry {
+            self.reg.set_c_flag();
+        } else {
+            self.reg.clear_c_flag();
+        }
+        
+    }
+
+    fn add_sp_e8(&mut self, rhs: &AddressingMode) {
+        let value = match self.get_data(rhs) {
+            DataType::ValueI8(val) => val as u8,
+            _ => panic!("Should only have an i8 here"),
+        };
+
+        let positive = value.get_bit(7) == 0;
+        println!("{}, {}", value, value as u8);
+        let mut half: bool;
+        let mut full: bool;
+
+        if positive {
+            let value = (value << 1) >> 1;
+            let lo = (self.sp & 0xFF) as u8;
+            let (res, half_carry, full_carry) = self.carry_track_add_u8(lo, value);
+
+            let mut hi = (self.sp >> 8) as u8;
+            if full_carry {
+                hi = hi.wrapping_add(1);
+            }
+            self.sp = ((hi as u16) << 8) | lo as u16;
+            half = half_carry;
+            full = full_carry
+        } else {
+            let value = (value << 1) >> 1;
+            let lo = (self.sp & 0xFF) as u8;
+            let (res, half_carry, full_carry) = self.carry_track_sub_u8(lo, value);
+
+            let mut hi = (self.sp >> 8) as u8;
+            if full_carry {
+                hi = hi.wrapping_sub(1);
+            }
+            self.sp = ((hi as u16) << 8) | lo as u16;
+            half = half_carry;
+            full = full_carry
+        }
+
+        self.reg.clear_z_flag();
+        self.reg.clear_n_flag();
+
+        if half {
+            self.reg.set_h_flag();
+        } else {
+            self.reg.clear_h_flag();
+        }
+
+        if full {
+            self.reg.set_c_flag();
+        } else {
+            self.reg.clear_c_flag();
+        }
     }
 
     fn adc(&mut self, rhs: &AddressingMode) {
@@ -784,7 +918,10 @@ impl<'a> Cpu<'a> {
         if prefixed {
             code = self.read_mem_u8(self.pc + 1);
             match code {
-                0x11 => self.rotate_left(&lhs, true, true),
+                0x00..=0x07 => self.rotate_left(&lhs, true, false),
+                0x08..=0x0f => self.rotate_right(&lhs, true, false),
+                0x10..=0x17 => self.rotate_left(&lhs, true, true),
+                0x18..=0x1f => self.rotate_right(&lhs, true, false),
                 0xbe => self.res(7, &rhs),
                 0x7c | 0x7e => self.bit_check(7, &rhs),
                 _ => return self.crash(CpuError::OpcodeNotImplemented(code, true)),
@@ -796,6 +933,7 @@ impl<'a> Cpu<'a> {
                 0x04 | 0x0c | 0x14 | 0x1c | 0x24 | 0x2c | 0x34 | 0x3c => self.increment_u8(&lhs),
                 0x03 | 0x13 | 0x23 | 0x33 => self.increment_u16(&lhs),
                 0x0b | 0x1b | 0x2b | 0x3b => self.decrement_u16(&lhs),
+                0x09 | 0x19 | 0x29 | 0x39 => self.add_hl_u16(&rhs),
                 0x01
                 | 0x02
                 | 0x06
@@ -853,6 +991,7 @@ impl<'a> Cpu<'a> {
                 0xa8..=0xaf | 0xee => self.xor_with_a(&rhs),
                 0xb0..=0xb7 | 0xf6 => self.or_with_a(&rhs),
                 0xb8..=0xbf | 0xfe => self.sub_a(&rhs, false),
+                0xe8 => self.add_sp_e8(&rhs),
                 0xf3 => self.ime = false,
                 _ => return self.crash(CpuError::OpcodeNotImplemented(code, false)),
             };

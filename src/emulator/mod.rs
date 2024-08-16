@@ -187,15 +187,15 @@ impl<'a> Emulator<'a> {
                 test.initial.c,
                 test.initial.d,
                 test.initial.e,
-                test.initial.f,
                 test.initial.h,
                 test.initial.l,
+                test.initial.f,
                 test.initial.sp,
                 test.initial.pc - 1
             );
             println!(
                 "  Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
-                a, b, c, d, e, f, h, l, sp, pc
+                a, b, c, d, e, h, l, f, sp, pc
             );
             println!(
                 "Expected: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
@@ -204,9 +204,9 @@ impl<'a> Emulator<'a> {
                 test.after.c,
                 test.after.d,
                 test.after.e,
-                test.after.f,
                 test.after.h,
                 test.after.l,
+                test.after.f,
                 test.after.sp,
                 test.after.pc - 1
             );
