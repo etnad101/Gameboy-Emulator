@@ -14,6 +14,10 @@ use crate::{
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::{errors::CpuError, test::State, Debugger};
+enum Direction {
+    Left,
+    Right,
+}
 
 enum JumpCondition {
     Z,
@@ -39,7 +43,6 @@ pub struct Cpu<'a> {
     reg: Registers,
     sp: u16,
     pc: u16,
-    ime: bool,
     normal_opcodes: HashMap<u8, Opcode>,
     prefixed_opcodes: HashMap<u8, Opcode>,
     memory: Rc<RefCell<MemoryBus>>,
@@ -52,7 +55,6 @@ impl<'a> Cpu<'a> {
             reg: Registers::new(),
             sp: 0,
             pc: 0,
-            ime: false,
             normal_opcodes: Opcode::generate_normal_opcode_map(),
             prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
             memory,
@@ -421,7 +423,7 @@ impl<'a> Cpu<'a> {
             None => {
                 self.pc = self.pop_stack() + 3;
                 if set_ime {
-                    self.ime = true
+                    self.write_mem_u8(0xFFFF, 0xFF);
                 }
                 return 0;
             }
@@ -456,38 +458,94 @@ impl<'a> Cpu<'a> {
         }
     }
 
-    fn bit_check(&mut self, bit: u8, addressing_mode: &AddressingMode) {
-        let byte = match self.get_data(addressing_mode) {
+    fn shift(&mut self, addressing_mode: &AddressingMode, direction: Direction, logical: bool) {
+        let value = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("bit check not yet implemented or dosent exist"),
+            _ => panic!("Should only have u8 value here"),
         };
 
-        if byte.get_bit(bit) == 0 {
+        let (new_val, shifted_out_bit) = match direction {
+            Direction::Left => {
+                (value << 1, value.get_bit(7))
+            }
+            Direction::Right => {
+                if logical {
+                    (value >> 1, value.get_bit(0))
+                } else {
+                    let sign_bit = value.get_bit(7);
+                    ((value >> 1) | (sign_bit << 7), value.get_bit(0))
+                }
+            }
+        };
+
+        if new_val == 0 {
             self.reg.set_z_flag();
         } else {
             self.reg.clear_z_flag();
         }
+
         self.reg.clear_n_flag();
-        self.reg.set_h_flag();
+        self.reg.clear_h_flag();
+
+        if shifted_out_bit == 1 {
+            self.reg.set_c_flag();
+        } else {
+            self.reg.clear_c_flag();
+        }
+
+        match addressing_mode {
+            AddressingMode::ImmediateRegister(reg) => match reg {
+                Register::A => self.reg.a = new_val,
+                Register::B => self.reg.b = new_val,
+                Register::C => self.reg.c = new_val,
+                Register::D => self.reg.d = new_val,
+                Register::E => self.reg.e = new_val,
+                Register::H => self.reg.h = new_val,
+                Register::L => self.reg.l = new_val,
+                _ => panic!("Should only rotate 8 bit values"),
+            },
+            AddressingMode::AddressRegister(_) => {
+                let addr = match self.get_data(addressing_mode) {
+                    DataType::Address(addr) => addr,
+                    _ => panic!("Expected addr value here"),
+                };
+
+                self.write_mem_u8(addr, new_val);
+            }
+            _ => panic!("Should only have r8 or address register"),
+        }
     }
 
-    fn rotate_left(&mut self, addressing_mode: &AddressingMode, prefixed: bool, through_carry: bool) {
+    fn rotate(&mut self, addressing_mode: &AddressingMode, direction: Direction, update_z: bool, through_carry: bool) {
         let data = match self.get_data(addressing_mode) {
             DataType::ValueU8(value) => value,
             DataType::Address(addr) => self.read_mem_u8(addr),
             _ => panic!("Expected u8 value here"),
         };
 
-        let shifted_out_bit = data.get_bit(7);
-        let new_val = if through_carry {
-            (data << 1) | self.reg.get_c_flag()
-        } else {
-            (data << 1) | shifted_out_bit
+        let (shifted_out_bit, new_val) = match direction {
+            Direction::Left => {
+                let shifted_out_bit = data.get_bit(7);
+                let new_val = if through_carry {
+                    (data << 1) | self.reg.get_c_flag()
+                } else {
+                    (data << 1) | shifted_out_bit
+                };
+                (shifted_out_bit, new_val)
+            }
+            Direction::Right => {
+                let shifted_out_bit = data.get_bit(0);
+                let new_val = if through_carry {
+                    (data >> 1) | (self.reg.get_c_flag() << 7)
+                } else {
+                    (data >> 1) | (shifted_out_bit << 7)
+                };
+                (shifted_out_bit, new_val)
+            }
         };
 
-
-        if prefixed && (new_val == 0) {
+        if update_z && (new_val == 0) {
             self.reg.set_z_flag()
         } else {
             self.reg.clear_z_flag()
@@ -525,35 +583,27 @@ impl<'a> Cpu<'a> {
         }
     }
 
-    fn rotate_right(&mut self, addressing_mode: &AddressingMode, prefixed: bool, through_carry: bool) {
-        let data = match self.get_data(addressing_mode) {
-            DataType::ValueU8(value) => value,
+    fn swap(&mut self, addressing_mode: &AddressingMode) {
+        let value = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Expected u8 value here"),
+            _ => panic!("Expected u8 or addr here"),
         };
 
-        let shifted_out_bit = data.get_bit(0);
-        let new_val = if through_carry {
-            (data >> 1) | self.reg.get_c_flag()
-        } else {
-            (data >> 1) | shifted_out_bit
-        };
+        let hi = value >> 4;
+        let lo = value & 0x0F;
 
+        let new_val = (lo << 4) | hi;
 
-        if prefixed && (new_val == 0) {
-            self.reg.set_z_flag()
+        if new_val == 0 {
+            self.reg.set_z_flag();
         } else {
-            self.reg.clear_z_flag()
+            self.reg.clear_z_flag();
         }
 
         self.reg.clear_n_flag();
         self.reg.clear_h_flag();
-
-        if shifted_out_bit == 1 {
-            self.reg.set_c_flag();
-        } else {
-            self.reg.clear_c_flag();
-        }
+        self.reg.clear_c_flag();
 
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => match reg {
@@ -847,7 +897,44 @@ impl<'a> Cpu<'a> {
         self.reg.clear_c_flag();
     }
 
-    fn res(&mut self, bit: u8, addressing_mode: &AddressingMode) {
+    fn check_bit(&mut self, bit: u8, addressing_mode: &AddressingMode) {
+        let byte = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => val,
+            DataType::Address(addr) => self.read_mem_u8(addr),
+            _ => panic!("bit check not yet implemented or dosent exist"),
+        };
+
+        if byte.get_bit(bit) == 0 {
+            self.reg.set_z_flag();
+        } else {
+            self.reg.clear_z_flag();
+        }
+        self.reg.clear_n_flag();
+        self.reg.set_h_flag();
+    }
+
+    fn set_bit(&mut self, bit: u8, addressing_mode: &AddressingMode) {
+        let (mut byte, addr) = match self.get_data(addressing_mode) {
+            DataType::ValueU8(val) => (val, None),
+            DataType::Address(addr) => (self.read_mem_u8(addr), Some(addr)),
+            _ => panic!("Should not have any other type here"),
+        };
+        byte.set_bit(bit);
+
+        match addressing_mode {
+            AddressingMode::ImmediateRegister(Register::A) => self.reg.a = byte,
+            AddressingMode::ImmediateRegister(Register::B) => self.reg.b = byte,
+            AddressingMode::ImmediateRegister(Register::C) => self.reg.c = byte,
+            AddressingMode::ImmediateRegister(Register::D) => self.reg.d = byte,
+            AddressingMode::ImmediateRegister(Register::E) => self.reg.e = byte,
+            AddressingMode::ImmediateRegister(Register::H) => self.reg.h = byte,
+            AddressingMode::ImmediateRegister(Register::L) => self.reg.l = byte,
+            AddressingMode::AddressRegister(Register::HL) => self.write_mem_u8(addr.unwrap(), byte),
+            _ => panic!("should not have anything else here"),
+        };
+    }
+
+    fn reset_bit(&mut self, bit: u8, addressing_mode: &AddressingMode) {
         let (mut byte, addr) = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => (val, None),
             DataType::Address(addr) => (self.read_mem_u8(addr), Some(addr)),
@@ -868,7 +955,9 @@ impl<'a> Cpu<'a> {
         };
     }
 
-    // Execution methods
+    fn daa(&mut self) {
+    }
+
     pub fn execute_next_opcode(&mut self) -> Result<usize, CpuError> {
         // Get next instruction
         let mut code = self.read_mem_u8(self.pc);
@@ -914,16 +1003,41 @@ impl<'a> Cpu<'a> {
         // Execute instruction
         let mut skip_pc_increase = false;
         let mut extra_cycles: usize = 0;
-
         if prefixed {
             code = self.read_mem_u8(self.pc + 1);
             match code {
-                0x00..=0x07 => self.rotate_left(&lhs, true, false),
-                0x08..=0x0f => self.rotate_right(&lhs, true, false),
-                0x10..=0x17 => self.rotate_left(&lhs, true, true),
-                0x18..=0x1f => self.rotate_right(&lhs, true, false),
-                0xbe => self.res(7, &rhs),
-                0x7c | 0x7e => self.bit_check(7, &rhs),
+                0x00..=0x07 => self.rotate(&lhs, Direction::Left, true, false),
+                0x08..=0x0f => self.rotate(&lhs, Direction::Right, true, false),
+                0x10..=0x17 => self.rotate(&lhs, Direction::Left, true, true),
+                0x18..=0x1f => self.rotate(&lhs, Direction::Right, true, true),
+                0x20..=0x27 => self.shift(&lhs, Direction::Left, false),
+                0x28..=0x2f => self.shift(&lhs, Direction::Right, false),
+                0x30..=0x37 => self.swap(&lhs),
+                0x38..=0x3f => self.shift(&lhs, Direction::Right, true),
+                0x40..=0x47 => self.check_bit(0, &rhs),
+                0x48..=0x4f => self.check_bit(1, &rhs),
+                0x50..=0x57 => self.check_bit(2, &rhs),
+                0x58..=0x5f => self.check_bit(3, &rhs),
+                0x60..=0x67 => self.check_bit(4, &rhs),
+                0x68..=0x6f => self.check_bit(5, &rhs),
+                0x70..=0x77 => self.check_bit(6, &rhs),
+                0x78..=0x7f => self.check_bit(7, &rhs),
+                0x80..=0x87 => self.reset_bit(0, &rhs),
+                0x88..=0x8f => self.reset_bit(1, &rhs),
+                0x90..=0x97 => self.reset_bit(2, &rhs),
+                0x98..=0x9f => self.reset_bit(3, &rhs),
+                0xa0..=0xa7 => self.reset_bit(4, &rhs),
+                0xa8..=0xaf => self.reset_bit(5, &rhs),
+                0xb0..=0xb7 => self.reset_bit(6, &rhs),
+                0xb8..=0xbf => self.reset_bit(7, &rhs),
+                0xc0..=0xc7 => self.set_bit(0, &rhs),
+                0xc8..=0xcf => self.set_bit(1, &rhs),
+                0xd0..=0xd7 => self.set_bit(2, &rhs),
+                0xd8..=0xdf => self.set_bit(3, &rhs),
+                0xe0..=0xe7 => self.set_bit(4, &rhs),
+                0xe8..=0xef => self.set_bit(5, &rhs),
+                0xf0..=0xf7 => self.set_bit(6, &rhs),
+                0xf8..=0xff => self.set_bit(7, &rhs),
                 _ => return self.crash(CpuError::OpcodeNotImplemented(code, true)),
             };
         } else {
@@ -957,10 +1071,13 @@ impl<'a> Cpu<'a> {
                 | 0xea
                 | 0x77..=0x7f
                 | 0xf0 => self.load_or_store_value(&lhs, &rhs, None),
+                0x27 => self.daa(),
                 0x22 | 0x2a => self.load_or_store_value(&lhs, &rhs, Some(StoreLoadModifier::IncHL)),
                 0x32 | 0x3a => self.load_or_store_value(&lhs, &rhs, Some(StoreLoadModifier::DecHL)),
-                0x07 => self.rotate_left(&lhs, false, false),
-                0x17 => self.rotate_left(&lhs, false, true),
+                0x07 => self.rotate(&lhs, Direction::Left, false, false),
+                0x0f => self.rotate(&lhs, Direction::Right, false, false),
+                0x17 => self.rotate(&lhs, Direction::Left, false, true),
+                0x1f => self.rotate(&lhs, Direction::Right, false, true),
                 0x18 => extra_cycles = self.rel_jump(&rhs, None),
                 0x20 => extra_cycles = self.rel_jump(&rhs, Some(JumpCondition::NZ)),
                 0x28 => extra_cycles = self.rel_jump(&rhs, Some(JumpCondition::Z)),
@@ -992,7 +1109,8 @@ impl<'a> Cpu<'a> {
                 0xb0..=0xb7 | 0xf6 => self.or_with_a(&rhs),
                 0xb8..=0xbf | 0xfe => self.sub_a(&rhs, false),
                 0xe8 => self.add_sp_e8(&rhs),
-                0xf3 => self.ime = false,
+                0xf3 => self.write_mem_u8(0xFFFF, 0),
+                0xfb => self.write_mem_u8(0xFFFF, 0xFF),
                 _ => return self.crash(CpuError::OpcodeNotImplemented(code, false)),
             };
         };
