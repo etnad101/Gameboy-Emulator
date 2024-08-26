@@ -413,7 +413,7 @@ impl<'a> Cpu<'a> {
         self.pc = addr;
     }
 
-    fn ret(&mut self, condition: Option<JumpCondition>, set_ime: bool) -> u8 {
+    fn ret(&mut self, condition: Option<JumpCondition>, set_ime: bool) -> usize {
         // add 3 to pc to account for CALL instruction size
         let jump = match condition {
             Some(JumpCondition::Z) => self.reg.get_z_flag() == 1,
@@ -958,6 +958,29 @@ impl<'a> Cpu<'a> {
     fn daa(&mut self) {
     }
 
+    fn cpl(&mut self) {
+        self.reg.a = !self.reg.a;
+        self.reg.set_n_flag();
+        self.reg.set_h_flag();
+    }
+
+    fn scf(&mut self) {
+        self.reg.clear_n_flag();
+        self.reg.clear_h_flag();
+        self.reg.set_c_flag();
+    }
+
+    fn ccf(&mut self) {
+        self.reg.clear_n_flag();
+        self.reg.clear_h_flag();
+
+        if self.reg.get_c_flag() == 1 {
+            self.reg.clear_c_flag();
+        } else {
+            self.reg.set_c_flag();
+        }
+    }
+
     pub fn execute_next_opcode(&mut self) -> Result<usize, CpuError> {
         // Get next instruction
         let mut code = self.read_mem_u8(self.pc);
@@ -1048,6 +1071,7 @@ impl<'a> Cpu<'a> {
                 0x03 | 0x13 | 0x23 | 0x33 => self.increment_u16(&lhs),
                 0x0b | 0x1b | 0x2b | 0x3b => self.decrement_u16(&lhs),
                 0x09 | 0x19 | 0x29 | 0x39 => self.add_hl_u16(&rhs),
+                0x76 => println!("HALT: TODO"),
                 0x01
                 | 0x02
                 | 0x06
@@ -1081,6 +1105,17 @@ impl<'a> Cpu<'a> {
                 0x18 => extra_cycles = self.rel_jump(&rhs, None),
                 0x20 => extra_cycles = self.rel_jump(&rhs, Some(JumpCondition::NZ)),
                 0x28 => extra_cycles = self.rel_jump(&rhs, Some(JumpCondition::Z)),
+                0x30 => extra_cycles = self.rel_jump(&rhs, Some(JumpCondition::NC)),
+                0x38 => extra_cycles = self.rel_jump(&rhs, Some(JumpCondition::C)),
+                0x2f => self.cpl(),
+                0x37 => self.scf(),
+                0x3f => self.ccf(),
+                0xc0 => {
+                    extra_cycles = self.ret(Some(JumpCondition::Z), false);
+                    if  extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                }
                 0xc1 => self.pop_stack_instr(&lhs),
                 0xc3 => {
                     skip_pc_increase = true;
@@ -1088,7 +1123,8 @@ impl<'a> Cpu<'a> {
                 }
                 0xc5 => self.push_stack_instr(&lhs),
                 0xc8 => {
-                    if self.ret(Some(JumpCondition::Z), false) > 0 {
+                    extra_cycles = self.ret(Some(JumpCondition::Z), false);
+                    if  extra_cycles > 0 {
                         skip_pc_increase = true;
                     }
                 }
