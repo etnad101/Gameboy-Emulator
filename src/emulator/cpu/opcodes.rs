@@ -77,9 +77,11 @@ impl Opcode {
             Opcode::new(0xc0, "RET NZ", 1, 8, /* + 12 if taken */ AddressingMode::None, AddressingMode::None),
             Opcode::new(0xc2, "JP NZ, a16", 3, 12, /* + 4 if taken */ AddressingMode::None, AddressingMode::AddressU16),
             Opcode::new(0xc3, "JP a16", 3, 16, AddressingMode::AddressU16, AddressingMode::None),
+            Opcode::new(0xc4, "CALL NZ, a16", 3, 12 /* + 12 if taken */, AddressingMode::None, AddressingMode::AddressU16),
             Opcode::new(0xc8, "RET Z", 1, 8 /* + 12 if taken */, AddressingMode::None, AddressingMode::None),
             Opcode::new(0xc9, "RET", 1, 16, AddressingMode::None, AddressingMode::None),
             Opcode::new(0xcd, "CALL a16", 3, 24, AddressingMode::AddressU16, AddressingMode::None),
+            Opcode::new(0xd4, "CALL NC, a16", 3, 12 /* + 12 if taken */, AddressingMode::None, AddressingMode::AddressU16),
             // 8-bit load instructions
             Opcode::new(0x02, "LD [BC], A", 1, 8, AddressingMode::AddressRegister(Register::BC), AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0x06, "LD B, n8", 2, 8, AddressingMode::ImmediateRegister(Register::B), AddressingMode::ImmediateU8),

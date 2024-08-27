@@ -426,14 +426,36 @@ impl<'a> Cpu<'a> {
         extra_cycles
     }
 
-    fn call(&mut self, addressing_mode: &AddressingMode) {
-        let addr = match self.get_data(addressing_mode) {
-            DataType::Address(addr) => addr,
-            _ => panic!("Should only have an address here"),
+    fn call(&mut self, addressing_mode: &AddressingMode, condition: Option<JumpCondition>) -> usize {
+        let (jump, extra_cycles) = match condition {
+            Some(JumpCondition::NZ) => {
+                if self.reg.get_z_flag() == 0 {
+                    (true, 12)
+                } else {
+                    (false, 0)
+                }
+            },
+            Some(JumpCondition::NC) => {
+                if self.reg.get_c_flag() == 0 {
+                    (true, 12)
+                } else {
+                    (false, 0)
+                }
+            }
+            None => (true, 0),
+            _ => panic!("No other conditions"),
         };
 
-        self.push_stack(self.pc);
-        self.pc = addr;
+        if jump {
+            let addr = match self.get_data(addressing_mode) {
+                DataType::Address(addr) => addr,
+                _ => panic!("Should only have an address here"),
+            };
+
+            self.push_stack(self.pc);
+            self.pc = addr;
+        }
+        extra_cycles
     }
 
     fn ret(&mut self, condition: Option<JumpCondition>, set_ime: bool) -> usize {
@@ -1168,11 +1190,9 @@ impl<'a> Cpu<'a> {
                     }
                 }
                 0xc3 => _ = self.abs_jump(&lhs, None),
-                0xd2 => {
-                    extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NC));
-                    if extra_cycles > 0 {
-                        skip_pc_increase = true;
-                    }
+                0xc4 => {
+                    skip_pc_increase = true;
+                    self.call(&rhs, Some(JumpCondition::NZ));
                 }
                 0xc5 => self.push_stack_instr(&lhs),
                 0xc8 => {
@@ -1187,7 +1207,17 @@ impl<'a> Cpu<'a> {
                 }
                 0xcd => {
                     skip_pc_increase = true;
-                    self.call(&lhs);
+                    self.call(&lhs, None);
+                }
+                0xd2 => {
+                    extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NC));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                }
+                0xd4 => {
+                    skip_pc_increase = true;
+                    self.call(&rhs, Some(JumpCondition::NC));
                 }
                 0x80..=0x87 | 0xc6 => self.add_a_u8(&rhs),
                 0x88..=0x8f | 0xce => self.adc(&rhs),
