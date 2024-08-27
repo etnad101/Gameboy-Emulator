@@ -75,6 +75,7 @@ impl Opcode {
             Opcode::new(0x30, "JR NC, e8", 2, 8 /* + 4 if taken */, AddressingMode::None, AddressingMode::ImmediateI8),
             Opcode::new(0x38, "JR C, e8", 2, 8 /* + 4 if taken */, AddressingMode::None, AddressingMode::ImmediateI8),
             Opcode::new(0xc0, "RET NZ", 1, 8, /* + 12 if taken */ AddressingMode::None, AddressingMode::None),
+            Opcode::new(0xc2, "JP NZ, a16", 3, 12, /* + 4 if taken */ AddressingMode::None, AddressingMode::AddressU16),
             Opcode::new(0xc3, "JP a16", 3, 16, AddressingMode::AddressU16, AddressingMode::None),
             Opcode::new(0xc8, "RET Z", 1, 8 /* + 12 if taken */, AddressingMode::None, AddressingMode::None),
             Opcode::new(0xc9, "RET", 1, 16, AddressingMode::None, AddressingMode::None),

@@ -123,17 +123,17 @@ impl<'a> Cpu<'a> {
     pub fn push_stack(&mut self, value: u16) {
         let hi = ((value & 0xFF00) >> 8) as u8;
         let lo = (value & 0xFF) as u8;
+        self.sp -= 1;
         self.write_mem_u8(self.sp, hi);
         self.sp -= 1;
         self.write_mem_u8(self.sp, lo);
-        self.sp -= 1;
     }
 
     pub fn pop_stack(&mut self) -> u16 {
-        self.sp += 1;
         let lo = self.read_mem_u8(self.sp);
         self.sp += 1;
         let hi = self.read_mem_u8(self.sp);
+        self.sp += 1;
         ((hi as u16) << 8) | lo as u16
     }
 
@@ -394,13 +394,36 @@ impl<'a> Cpu<'a> {
         extra_cycles
     }
 
-    fn abs_jump(&mut self, addressing_mode: &AddressingMode) {
-        let addr = match self.get_data(addressing_mode) {
-            DataType::Address(addr) => addr,
-            _ => panic!("Should only have an address here"),
+    fn abs_jump(&mut self, addressing_mode: &AddressingMode, condition: Option<JumpCondition>) -> usize {
+        let (jump, extra_cycles) = match condition {
+            Some(JumpCondition::NZ) => {
+                if self.reg.get_z_flag() == 0 {
+                    (true, 4)
+                } else {
+                    (false, 0)
+                }
+            },
+            Some(JumpCondition::NC) => {
+                if self.reg.get_c_flag() == 0 {
+                    (true, 4)
+                } else {
+                    (false, 0)
+                }
+            }
+            None => (true, 0),
+            _ => panic!("No other conditions"),
         };
 
-        self.pc = addr;
+        if jump {
+            let addr = match self.get_data(addressing_mode) {
+                DataType::Address(addr) => addr,
+                _ => panic!("Should only have an address here"),
+            };
+
+            self.pc = addr;
+        }
+
+        extra_cycles
     }
 
     fn call(&mut self, addressing_mode: &AddressingMode) {
@@ -699,7 +722,6 @@ impl<'a> Cpu<'a> {
         };
 
         let positive = value.get_bit(7) == 0;
-        println!("{}, {}", value, value as u8);
         let mut half: bool;
         let mut full: bool;
 
@@ -956,6 +978,29 @@ impl<'a> Cpu<'a> {
     }
 
     fn daa(&mut self) {
+        if self.reg.get_n_flag() == 0 {  // after an addition, adjust if (half-)carry occurred or if result is out of bounds
+            if (self.reg.get_c_flag() == 1) || self.reg.a > 0x99 {
+                self.reg.a = self.reg.a.wrapping_add(0x60);
+                self.reg.set_c_flag()
+            }
+            if self.reg.get_h_flag() == 1 || (self.reg.a & 0x0f) > 0x09 {
+                self.reg.a = self.reg.a.wrapping_add(0x6); 
+            }
+        } else {  // after a subtraction, only adjust if (half-)carry occurred
+            if self.reg.get_c_flag() == 1 { 
+                self.reg.a = self.reg.a.wrapping_sub(0x60); 
+            }
+            if self.reg.get_h_flag() == 1 { 
+                self.reg.a = self.reg.a.wrapping_sub(0x6); 
+            }
+        }
+
+        if self.reg.a == 0 {
+            self.reg.set_z_flag();
+        } else {
+            self.reg.clear_z_flag();
+        }
+        self.reg.clear_h_flag();
     }
 
     fn cpl(&mut self) {
@@ -1061,7 +1106,6 @@ impl<'a> Cpu<'a> {
                 0xe8..=0xef => self.set_bit(5, &rhs),
                 0xf0..=0xf7 => self.set_bit(6, &rhs),
                 0xf8..=0xff => self.set_bit(7, &rhs),
-                _ => return self.crash(CpuError::OpcodeNotImplemented(code, true)),
             };
         } else {
             match code {
@@ -1071,7 +1115,7 @@ impl<'a> Cpu<'a> {
                 0x03 | 0x13 | 0x23 | 0x33 => self.increment_u16(&lhs),
                 0x0b | 0x1b | 0x2b | 0x3b => self.decrement_u16(&lhs),
                 0x09 | 0x19 | 0x29 | 0x39 => self.add_hl_u16(&rhs),
-                0x76 => println!("HALT: TODO"),
+                0x76 => println!("TODO: HALT"),
                 0x01
                 | 0x02
                 | 0x06
@@ -1111,15 +1155,24 @@ impl<'a> Cpu<'a> {
                 0x37 => self.scf(),
                 0x3f => self.ccf(),
                 0xc0 => {
-                    extra_cycles = self.ret(Some(JumpCondition::Z), false);
+                    extra_cycles = self.ret(Some(JumpCondition::NZ), false);
                     if  extra_cycles > 0 {
                         skip_pc_increase = true;
                     }
                 }
                 0xc1 => self.pop_stack_instr(&lhs),
-                0xc3 => {
-                    skip_pc_increase = true;
-                    self.abs_jump(&lhs)
+                0xc2 => {
+                    extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NZ));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                }
+                0xc3 => _ = self.abs_jump(&lhs, None),
+                0xd2 => {
+                    extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NC));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
                 }
                 0xc5 => self.push_stack_instr(&lhs),
                 0xc8 => {
@@ -1154,7 +1207,6 @@ impl<'a> Cpu<'a> {
         if !skip_pc_increase {
             self.pc += opcode_bytes;
         }
-
         Ok(opcode_cycles + extra_cycles)
     }
 
