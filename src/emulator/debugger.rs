@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fs, path::Path, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
 
 use chrono::{DateTime, Local};
 
@@ -8,6 +8,8 @@ use crate::{
 };
 
 use super::memory::MemoryBus;
+
+const CALL_LOG_HISTORY_LENGTH: usize = 10;
 
 struct Tile {
     data: [u8; 64],
@@ -53,31 +55,34 @@ impl Tile {
 #[derive(PartialEq)]
 pub enum DebugFlags {
     ShowTileMap,
-    DumpMemOnCrash,
+    DumpMem,
+    DumpCallLog,
 }
 
 pub struct Debugger<'a> {
     active: bool,
     flags: Vec<DebugFlags>,
-    debug_window: Option<&'a mut Display>,
+    tile_window: Option<&'a mut Display>,
     memory: Rc<RefCell<MemoryBus>>,
     palette: Palette,
+    call_log: VecDeque<String>,
 }
 
 impl<'a> Debugger<'a> {
     pub fn new(
         flags: Vec<DebugFlags>,
         memory: Rc<RefCell<MemoryBus>>,
-        debug_window: Option<&'a mut Display>,
+        tile_window: Option<&'a mut Display>,
         palette: Palette,
     ) -> Self {
         let active = !flags.is_empty();
         Self {
             active,
             flags,
-            debug_window,
+            tile_window,
             memory,
             palette,
+            call_log: VecDeque::new(),
         }
     }
 
@@ -89,9 +94,33 @@ impl<'a> Debugger<'a> {
         self.active = false
     }
 
-    pub fn dump_mem(&self) {
-        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpMemOnCrash)) {
+    pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpCallLog)) {
             return;
+        }
+        let msg = format!("{:#06x}: '{}' ({:#04x})", pc, asm, code);
+        self.call_log.push_front(msg);
+        if self.call_log.len() > CALL_LOG_HISTORY_LENGTH {
+            self.call_log.pop_back();
+        }
+    }
+
+    pub fn create_call_log_dump(&self) -> Option<String> {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpCallLog)) {
+            return None;
+        }
+        let mut log = String::from("CALL LOG\n------------------------------------\n");
+        for intruction in &self.call_log {
+            log.push_str(intruction);
+            log.push_str("\n");
+        }
+
+        Some(log)
+    }
+
+    pub fn create_mem_dump(&self) -> Option<String> {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpMem)) {
+            return None;
         }
 
         let mut mem_log: String = String::new();
@@ -141,6 +170,23 @@ impl<'a> Debugger<'a> {
             let byte: u8 = self.memory.borrow().read_u8(i as u16);
             mem_log.push_str(&format!("{:02x} ", byte));
         }
+        Some(mem_log)
+    }
+
+    pub fn dump_logs(&mut self) {
+        let mut log = String::new();
+        match self.create_call_log_dump() {
+            Some(l) => log.push_str(&l),
+            None => (),
+        }
+        match self.create_mem_dump() {
+            Some(l) => log.push_str(&l),
+            None => (),
+        }
+
+        if log == String::new() {
+            return;
+        }
 
         let dt = Local::now();
         let native_utc = dt.naive_utc();
@@ -153,7 +199,7 @@ impl<'a> Debugger<'a> {
         };
         let path = "./logs/".to_string() + &log_name;
         fs::File::create(path.clone()).expect("unable to create file");
-        fs::write(path, mem_log).expect("unable to write to file");
+        fs::write(path, log).expect("unable to write to file");
     }
 
     pub fn render_tiles(&mut self) {
@@ -161,7 +207,7 @@ impl<'a> Debugger<'a> {
             return;
         }
 
-        match self.debug_window {
+        match self.tile_window {
             Some(ref mut window) => {
                 let (length, width) = window.size();
                 // Check to see if window can hold tiles evenly without wrapping around or

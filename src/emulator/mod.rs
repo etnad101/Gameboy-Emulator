@@ -54,6 +54,7 @@ pub struct Emulator<'a> {
     debugger: Rc<RefCell<Debugger<'a>>>,
     timer_cycles: u32,
     frames: usize,
+    uptime_s: usize,
 }
 
 impl<'a> Emulator<'a> {
@@ -79,6 +80,7 @@ impl<'a> Emulator<'a> {
             debugger,
             timer_cycles: 0,
             frames: 0,
+            uptime_s: 0,
         }
     }
 
@@ -109,6 +111,11 @@ impl<'a> Emulator<'a> {
 
     pub fn update(&mut self) -> Result<Vec<Color>, Box<dyn Error>> {
         self.frames += 1;
+        if self.frames >= 60 {
+            self.uptime_s += 1;
+            self.frames = 0;
+        }
+
         let mut cycles_this_frame = 0;
 
         while cycles_this_frame < MAX_CYCLES_PER_FRAME {

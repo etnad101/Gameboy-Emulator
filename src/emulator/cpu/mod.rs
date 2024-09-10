@@ -43,6 +43,7 @@ pub struct Cpu<'a> {
     reg: Registers,
     sp: u16,
     pc: u16,
+    ime: bool,
     normal_opcodes: HashMap<u8, Opcode>,
     prefixed_opcodes: HashMap<u8, Opcode>,
     memory: Rc<RefCell<MemoryBus>>,
@@ -55,6 +56,7 @@ impl<'a> Cpu<'a> {
             reg: Registers::new(),
             sp: 0,
             pc: 0,
+            ime: false,
             normal_opcodes: Opcode::generate_normal_opcode_map(),
             prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
             memory,
@@ -64,10 +66,10 @@ impl<'a> Cpu<'a> {
 
     // Debugging methods
 
-    pub fn crash(&mut self, error: CpuError) -> Result<usize, CpuError> {
-        self.debugger.borrow().dump_mem();
+    pub fn crash(&mut self, error: CpuError) -> CpuError {
+        self.debugger.borrow_mut().dump_logs();
         eprintln!("{:#06x}", self.pc);
-        Err(error)
+        error
     }
 
     // Utility methods
@@ -241,7 +243,7 @@ impl<'a> Cpu<'a> {
             DataType::Address(addr) => self.read_mem_u8(addr),
             _ => panic!("Expected u8 here"),
         };
-        
+
         let (sum, half_carry, _) = self.carry_track_add_u8(value, 1);
 
         match addressing_mode {
@@ -394,7 +396,11 @@ impl<'a> Cpu<'a> {
         extra_cycles
     }
 
-    fn abs_jump(&mut self, addressing_mode: &AddressingMode, condition: Option<JumpCondition>) -> usize {
+    fn abs_jump(
+        &mut self,
+        addressing_mode: &AddressingMode,
+        condition: Option<JumpCondition>,
+    ) -> usize {
         let (jump, extra_cycles) = match condition {
             Some(JumpCondition::NZ) => {
                 if self.reg.get_z_flag() == 0 {
@@ -402,7 +408,7 @@ impl<'a> Cpu<'a> {
                 } else {
                     (false, 0)
                 }
-            },
+            }
             Some(JumpCondition::NC) => {
                 if self.reg.get_c_flag() == 0 {
                     (true, 4)
@@ -420,13 +426,17 @@ impl<'a> Cpu<'a> {
                 _ => panic!("Should only have an address here"),
             };
 
-            self.pc = addr;
+            self.pc = addr - 3;
         }
 
         extra_cycles
     }
 
-    fn call(&mut self, addressing_mode: &AddressingMode, condition: Option<JumpCondition>) -> usize {
+    fn call(
+        &mut self,
+        addressing_mode: &AddressingMode,
+        condition: Option<JumpCondition>,
+    ) -> usize {
         let (jump, extra_cycles) = match condition {
             Some(JumpCondition::NZ) => {
                 if self.reg.get_z_flag() == 0 {
@@ -434,7 +444,7 @@ impl<'a> Cpu<'a> {
                 } else {
                     (false, 0)
                 }
-            },
+            }
             Some(JumpCondition::NC) => {
                 if self.reg.get_c_flag() == 0 {
                     (true, 12)
@@ -511,9 +521,7 @@ impl<'a> Cpu<'a> {
         };
 
         let (new_val, shifted_out_bit) = match direction {
-            Direction::Left => {
-                (value << 1, value.get_bit(7))
-            }
+            Direction::Left => (value << 1, value.get_bit(7)),
             Direction::Right => {
                 if logical {
                     (value >> 1, value.get_bit(0))
@@ -562,7 +570,13 @@ impl<'a> Cpu<'a> {
         }
     }
 
-    fn rotate(&mut self, addressing_mode: &AddressingMode, direction: Direction, update_z: bool, through_carry: bool) {
+    fn rotate(
+        &mut self,
+        addressing_mode: &AddressingMode,
+        direction: Direction,
+        update_z: bool,
+        through_carry: bool,
+    ) {
         let data = match self.get_data(addressing_mode) {
             DataType::ValueU8(value) => value,
             DataType::Address(addr) => self.read_mem_u8(addr),
@@ -722,7 +736,7 @@ impl<'a> Cpu<'a> {
         self.reg.set_hl(res);
 
         self.reg.clear_n_flag();
-        
+
         if half_carry {
             self.reg.set_h_flag();
         } else {
@@ -734,7 +748,6 @@ impl<'a> Cpu<'a> {
         } else {
             self.reg.clear_c_flag();
         }
-        
     }
 
     fn add_sp_e8(&mut self, rhs: &AddressingMode) {
@@ -1000,20 +1013,22 @@ impl<'a> Cpu<'a> {
     }
 
     fn daa(&mut self) {
-        if self.reg.get_n_flag() == 0 {  // after an addition, adjust if (half-)carry occurred or if result is out of bounds
+        if self.reg.get_n_flag() == 0 {
+            // after an addition, adjust if (half-)carry occurred or if result is out of bounds
             if (self.reg.get_c_flag() == 1) || self.reg.a > 0x99 {
                 self.reg.a = self.reg.a.wrapping_add(0x60);
                 self.reg.set_c_flag()
             }
             if self.reg.get_h_flag() == 1 || (self.reg.a & 0x0f) > 0x09 {
-                self.reg.a = self.reg.a.wrapping_add(0x6); 
+                self.reg.a = self.reg.a.wrapping_add(0x6);
             }
-        } else {  // after a subtraction, only adjust if (half-)carry occurred
-            if self.reg.get_c_flag() == 1 { 
-                self.reg.a = self.reg.a.wrapping_sub(0x60); 
+        } else {
+            // after a subtraction, only adjust if (half-)carry occurred
+            if self.reg.get_c_flag() == 1 {
+                self.reg.a = self.reg.a.wrapping_sub(0x60);
             }
-            if self.reg.get_h_flag() == 1 { 
-                self.reg.a = self.reg.a.wrapping_sub(0x6); 
+            if self.reg.get_h_flag() == 1 {
+                self.reg.a = self.reg.a.wrapping_sub(0x6);
             }
         }
 
@@ -1065,19 +1080,9 @@ impl<'a> Cpu<'a> {
                 Some(op) => op,
                 None => {
                     if prefixed {
-                        match self.crash(
-                            CpuError::UnrecognizedOpcode(code, true),
-                        ) {
-                            Ok(_) => panic!("This panic should not be possible to reach, if it is something went very wrong"),
-                            Err(e) => return Err(e)
-                        }
+                        return Err(self.crash(CpuError::UnrecognizedOpcode(code, true)));
                     } else {
-                        match self.crash(
-                            CpuError::UnrecognizedOpcode(code, false),
-                        ) {
-                            Ok(_) => panic!("This panic should not be possible to reach, if it is something went very wrong"),
-                            Err(e) => return Err(e)
-                        }
+                        return Err(self.crash(CpuError::UnrecognizedOpcode(code, false)));
                     }
                 }
             };
@@ -1089,6 +1094,10 @@ impl<'a> Cpu<'a> {
                 opcode.rhs.clone(),
             )
         };
+
+        if self.pc > 0x100 {
+            self.debugger.borrow_mut().push_call_log(self.pc, code, &opcode_asm);
+        }
 
         // Execute instruction
         let mut skip_pc_increase = false;
@@ -1137,7 +1146,7 @@ impl<'a> Cpu<'a> {
                 0x03 | 0x13 | 0x23 | 0x33 => self.increment_u16(&lhs),
                 0x0b | 0x1b | 0x2b | 0x3b => self.decrement_u16(&lhs),
                 0x09 | 0x19 | 0x29 | 0x39 => self.add_hl_u16(&rhs),
-                0x76 => println!("TODO: HALT"),
+                0x76 => (), // TODO: HALT OPCODE
                 0x01
                 | 0x02
                 | 0x06
@@ -1178,11 +1187,11 @@ impl<'a> Cpu<'a> {
                 0x3f => self.ccf(),
                 0xc0 => {
                     extra_cycles = self.ret(Some(JumpCondition::NZ), false);
-                    if  extra_cycles > 0 {
+                    if extra_cycles > 0 {
                         skip_pc_increase = true;
                     }
                 }
-                0xc1 => self.pop_stack_instr(&lhs),
+                0xc1 | 0xe1 | 0xf1 => self.pop_stack_instr(&lhs),
                 0xc2 => {
                     extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NZ));
                     if extra_cycles > 0 {
@@ -1194,10 +1203,10 @@ impl<'a> Cpu<'a> {
                     skip_pc_increase = true;
                     self.call(&rhs, Some(JumpCondition::NZ));
                 }
-                0xc5 => self.push_stack_instr(&lhs),
+                0xc5 | 0xe5 | 0xf5 => self.push_stack_instr(&lhs),
                 0xc8 => {
                     extra_cycles = self.ret(Some(JumpCondition::Z), false);
-                    if  extra_cycles > 0 {
+                    if extra_cycles > 0 {
                         skip_pc_increase = true;
                     }
                 }
@@ -1208,6 +1217,9 @@ impl<'a> Cpu<'a> {
                 0xcd => {
                     skip_pc_increase = true;
                     self.call(&lhs, None);
+                }
+                0xd0 => {
+                    self.ret(Some(JumpCondition::NC), false);
                 }
                 0xd2 => {
                     extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NC));
@@ -1228,9 +1240,9 @@ impl<'a> Cpu<'a> {
                 0xb0..=0xb7 | 0xf6 => self.or_with_a(&rhs),
                 0xb8..=0xbf | 0xfe => self.sub_a(&rhs, false),
                 0xe8 => self.add_sp_e8(&rhs),
-                0xf3 => self.write_mem_u8(0xFFFF, 0),
-                0xfb => self.write_mem_u8(0xFFFF, 0xFF),
-                _ => return self.crash(CpuError::OpcodeNotImplemented(code, false)),
+                0xf3 => self.ime = true,
+                0xfb => self.ime = false,
+                _ => return Err(self.crash(CpuError::OpcodeNotImplemented(code, false))),
             };
         };
 

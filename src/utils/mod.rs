@@ -18,7 +18,6 @@ impl BitOps<u8> for u8 {
     }
 }
 
-
 impl BitOps<i8> for i8 {
     fn get_bit(&self, bit: i8) -> i8 {
         (self & (1 << bit)) >> bit
