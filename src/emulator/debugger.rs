@@ -2,10 +2,8 @@ use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
 
 use chrono::{DateTime, Local};
 
-use crate::{
-    drivers::display::{Color, Display},
-    Palette,
-};
+use crate::Palette;
+use simple_graphics::display::{Color, Display};
 
 use super::memory::MemoryBus;
 

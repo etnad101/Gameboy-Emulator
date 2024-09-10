@@ -204,9 +204,9 @@ name = "gameboy-emulator"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "minifb",
  "serde",
  "serde_json",
+ "simple_graphics",
 ]
 
 [[package]]
@@ -515,6 +515,14 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "simple_graphics"
+version = "0.1.0"
+source = "git+https://github.com/etnad101/simple-graphics-rs#146ac1a27e0e3a027109331ebccbe54f799d633f"
+dependencies = [
+ "minifb",
 ]
 
 [[package]]

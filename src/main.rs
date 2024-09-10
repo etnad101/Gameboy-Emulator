@@ -12,7 +12,7 @@ mod utils;
 
 use std::error::Error;
 
-use drivers::display::{Color, Display, WHITE};
+use simple_graphics::display::{Color, Display, WHITE};
 use emulator::{debugger::DebugFlags, rom::Rom, Emulator};
 
 const SCREEN_WIDTH: usize = 160;

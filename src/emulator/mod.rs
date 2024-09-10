@@ -16,10 +16,8 @@ use ppu::Ppu;
 use rom::Rom;
 use test::TestData;
 
-use crate::{
-    drivers::display::{Color, Display},
-    Palette,
-};
+use crate::Palette;
+use simple_graphics::display::{Color, Display};
 
 const MEM_SIZE: usize = 0xFFFF;
 const CPU_FREQ: usize = 4_194_304; // T-cycles
