@@ -1,5 +1,6 @@
 use crate::emulator::cpu::BitOps;
 
+#[derive(Clone)]
 pub struct Registers {
     pub a: u8,
     pub b: u8,

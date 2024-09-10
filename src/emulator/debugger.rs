@@ -1,11 +1,12 @@
+use core::panic;
 use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
 
 use chrono::{DateTime, Local};
 
 use crate::Palette;
-use simple_graphics::display::{Color, Display};
+use simple_graphics::display::{Color, Display, WHITE};
 
-use super::memory::MemoryBus;
+use super::{cpu::registers::Registers, memory::MemoryBus};
 
 const CALL_LOG_HISTORY_LENGTH: usize = 10;
 
@@ -53,6 +54,7 @@ impl Tile {
 #[derive(PartialEq)]
 pub enum DebugFlags {
     ShowTileMap,
+    ShowRegisters,
     DumpMem,
     DumpCallLog,
 }
@@ -61,9 +63,11 @@ pub struct Debugger<'a> {
     active: bool,
     flags: Vec<DebugFlags>,
     tile_window: Option<&'a mut Display>,
+    register_window: Option<&'a mut Display>,
     memory: Rc<RefCell<MemoryBus>>,
     palette: Palette,
     call_log: VecDeque<String>,
+    last_opcode: String,
 }
 
 impl<'a> Debugger<'a> {
@@ -71,6 +75,7 @@ impl<'a> Debugger<'a> {
         flags: Vec<DebugFlags>,
         memory: Rc<RefCell<MemoryBus>>,
         tile_window: Option<&'a mut Display>,
+        register_window: Option<&'a mut Display>,
         palette: Palette,
     ) -> Self {
         let active = !flags.is_empty();
@@ -78,9 +83,11 @@ impl<'a> Debugger<'a> {
             active,
             flags,
             tile_window,
+            register_window,
             memory,
             palette,
             call_log: VecDeque::new(),
+            last_opcode: String::new(),
         }
     }
 
@@ -92,11 +99,16 @@ impl<'a> Debugger<'a> {
         self.active = false
     }
 
+    pub fn set_last_opcode(&mut self, opcode: String) {
+        self.last_opcode = opcode;
+    }
+
     pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
-        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpCallLog)) {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpCallLog) && !self.flags.contains(&DebugFlags::ShowRegisters)){
             return;
         }
-        let msg = format!("{:#06x}: '{}' ({:#04x})", pc, asm, code);
+
+        let msg = format!("pc:{:#06x} -> '{}' ({:#04x})", pc, asm, code);
         self.call_log.push_front(msg);
         if self.call_log.len() > CALL_LOG_HISTORY_LENGTH {
             self.call_log.pop_back();
@@ -104,7 +116,7 @@ impl<'a> Debugger<'a> {
     }
 
     pub fn create_call_log_dump(&self) -> Option<String> {
-        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpCallLog)) {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpCallLog) && !self.flags.contains(&DebugFlags::ShowRegisters)){
             return None;
         }
         let mut log = String::from("CALL LOG\n------------------------------------\n");
@@ -260,6 +272,30 @@ impl<'a> Debugger<'a> {
                 window.render().unwrap();
             }
             None => panic!("Must Provide window for tile map to be drawn to"),
+        }
+    }
+
+    pub fn render_register_window(&mut self, registers: Registers) {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::ShowTileMap)) {
+            return;
+        }
+        let call_log = self.create_call_log_dump().unwrap();
+        match self.register_window {
+            Some(ref mut window) => {
+                window.set_background(WHITE);
+                window.clear();
+                window.render_text(&format!("a:{:#04x}", registers.a), 5, 0).unwrap();
+                window.render_text(&format!("f:{:#010b}", registers.f), 65, 0).unwrap();
+                window.render_text(&format!("b:{:#04x}", registers.b), 5, 16).unwrap();
+                window.render_text(&format!("c:{:#04x}", registers.c), 65, 16).unwrap();
+                window.render_text(&format!("d:{:#04x}", registers.d), 5, 32).unwrap();
+                window.render_text(&format!("e:{:#04x}", registers.e), 65, 32).unwrap();
+                window.render_text(&format!("h:{:#04x}", registers.h), 5, 48).unwrap();
+                window.render_text(&format!("l:{:#04x}", registers.l), 65, 48).unwrap();
+                window.render_text(&call_log, 5, 60).unwrap();
+                window.render().unwrap()
+            }
+            None => panic!("Must provide window for register data to be drawn to"),
         }
     }
 }

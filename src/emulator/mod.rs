@@ -59,7 +59,8 @@ impl<'a> Emulator<'a> {
     pub fn new(
         palette: Palette,
         debug_flags: Vec<DebugFlags>,
-        debug_window: Option<&'a mut Display>,
+        tile_window: Option<&'a mut Display>,
+        register_window: Option<&'a mut Display>,
     ) -> Self {
         let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
         memory_bus.borrow_mut().load_rom(true, None).unwrap();
@@ -67,7 +68,8 @@ impl<'a> Emulator<'a> {
         let debugger = Rc::new(RefCell::new(Debugger::new(
             debug_flags,
             Rc::clone(&memory_bus),
-            debug_window,
+            tile_window,
+            register_window,
             palette,
         )));
 
@@ -145,6 +147,7 @@ impl<'a> Emulator<'a> {
 
     pub fn update_debug_view(&mut self) {
         self.debugger.borrow_mut().render_tiles();
+        self.debugger.borrow_mut().render_register_window(self.cpu.get_registers());
     }
 
     fn _load_state(&mut self, test: &TestData) {

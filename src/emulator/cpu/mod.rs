@@ -1,5 +1,5 @@
 mod opcodes;
-mod registers;
+pub(super) mod registers;
 
 use crate::{
     emulator::{
@@ -65,6 +65,10 @@ impl<'a> Cpu<'a> {
     }
 
     // Debugging methods
+
+    pub fn get_registers(&self) -> Registers {
+        self.reg.clone()
+    }
 
     pub fn crash(&mut self, error: CpuError) -> CpuError {
         self.debugger.borrow_mut().dump_logs();
@@ -1095,9 +1099,7 @@ impl<'a> Cpu<'a> {
             )
         };
 
-        if self.pc > 0x100 {
-            self.debugger.borrow_mut().push_call_log(self.pc, code, &opcode_asm);
-        }
+        self.debugger.borrow_mut().push_call_log(self.pc, code, &opcode_asm);
 
         // Execute instruction
         let mut skip_pc_increase = false;
