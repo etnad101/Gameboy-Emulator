@@ -280,7 +280,7 @@ impl<'a> Debugger<'a> {
     }
 
     pub fn render_register_window(&mut self, registers: Registers) {
-        if (!self.active) || (!self.flags.contains(&DebugFlags::ShowTileMap)) {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::ShowRegisters)) {
             return;
         }
         let call_log = self.create_call_log_dump().unwrap();
@@ -335,10 +335,6 @@ impl<'a> Debugger<'a> {
                     let tile_number_addr = tile_num_base + tile;
                     let tile_number = self.memory.borrow().read_u8(tile_number_addr);
                     let tile_data_addr = 0x8000 + (16 * tile_number as u16) as usize;
-                    println!(
-                        "num_base: {:#04x}, num_addr: {:#04x}, num: {:#04x}, data_addr: {:#04x}",
-                        tile_num_base, tile_number_addr, tile_number, tile_data_addr
-                    );
                     let tile_data = self
                         .memory
                         .borrow()
