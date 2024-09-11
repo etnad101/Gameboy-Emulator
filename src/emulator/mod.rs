@@ -61,6 +61,7 @@ impl<'a> Emulator<'a> {
         debug_flags: Vec<DebugFlags>,
         tile_window: Option<&'a mut Display>,
         register_window: Option<&'a mut Display>,
+        background_map_window: Option<&'a mut Display>,
     ) -> Self {
         let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
         memory_bus.borrow_mut().load_rom(true, None).unwrap();
@@ -70,6 +71,7 @@ impl<'a> Emulator<'a> {
             Rc::clone(&memory_bus),
             tile_window,
             register_window,
+            background_map_window,
             palette,
         )));
 

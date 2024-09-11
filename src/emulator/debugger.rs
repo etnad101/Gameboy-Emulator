@@ -3,10 +3,10 @@ use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
 
 use chrono::{DateTime, Local};
 
-use crate::Palette;
+use crate::{utils::BitOps, Palette};
 use simple_graphics::display::{Color, Display, WHITE};
 
-use super::{cpu::registers::Registers, memory::MemoryBus};
+use super::{cpu::registers::Registers, memory::MemoryBus, LCDRegister};
 
 const CALL_LOG_HISTORY_LENGTH: usize = 10;
 
@@ -33,6 +33,7 @@ impl Tile {
         }
         Tile { data: tile }
     }
+
     pub fn get_data(&self) -> [u8; 64] {
         self.data
     }
@@ -64,10 +65,10 @@ pub struct Debugger<'a> {
     flags: Vec<DebugFlags>,
     tile_window: Option<&'a mut Display>,
     register_window: Option<&'a mut Display>,
+    background_map_window: Option<&'a mut Display>,
     memory: Rc<RefCell<MemoryBus>>,
     palette: Palette,
     call_log: VecDeque<String>,
-    last_opcode: String,
 }
 
 impl<'a> Debugger<'a> {
@@ -76,6 +77,7 @@ impl<'a> Debugger<'a> {
         memory: Rc<RefCell<MemoryBus>>,
         tile_window: Option<&'a mut Display>,
         register_window: Option<&'a mut Display>,
+        background_map_window: Option<&'a mut Display>,
         palette: Palette,
     ) -> Self {
         let active = !flags.is_empty();
@@ -84,10 +86,10 @@ impl<'a> Debugger<'a> {
             flags,
             tile_window,
             register_window,
+            background_map_window,
             memory,
             palette,
             call_log: VecDeque::new(),
-            last_opcode: String::new(),
         }
     }
 
@@ -97,10 +99,6 @@ impl<'a> Debugger<'a> {
 
     pub fn deactivate(&mut self) {
         self.active = false
-    }
-
-    pub fn set_last_opcode(&mut self, opcode: String) {
-        self.last_opcode = opcode;
     }
 
     pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
@@ -120,8 +118,8 @@ impl<'a> Debugger<'a> {
             return None;
         }
         let mut log = String::from("CALL LOG\n------------------------------------\n");
-        for intruction in &self.call_log {
-            log.push_str(intruction);
+        for instruction in &self.call_log {
+            log.push_str(instruction);
             log.push_str("\n");
         }
 
@@ -223,12 +221,12 @@ impl<'a> Debugger<'a> {
                 // Check to see if window can hold tiles evenly without wrapping around or
                 // throwing a drawing error. Draw function expects to draw without wrapping
                 if (width % 8) != 0 || (length % 8) != 0 {
-                    panic!("Width and height must be multiples of 8, 128x192 recomended")
+                    panic!("Width and height must be multiples of 8, 128x192 recommended")
                 }
                 // Check to see if the window has enough pixels to hold all the tiles
                 // 384 tiles * 64 pixels each = 24576 pixels
                 if (length * width) < 24576 {
-                    panic!("Window not big enough to display all tiles, 128x192 recomended")
+                    panic!("Window not big enough to display all tiles, 128x192 recommended")
                 }
 
                 window.clear();
@@ -296,6 +294,18 @@ impl<'a> Debugger<'a> {
                 window.render().unwrap()
             }
             None => panic!("Must provide window for register data to be drawn to"),
+        }
+    }
+
+    pub fn render_background_map(&mut self) {
+        for tile in 0..32*32 {
+            let lcdc = self.memory.borrow().read_u8(LCDRegister::LCDC as u16);
+            let tile_num_base: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
+            let tile_number_addr = tile_num_base + tile;
+            let tile_number = self.memory.borrow().read_u8(tile_number_addr);
+            let tile_data_addr = 0x8000 + (16 * tile_number as u16) as usize;
+            let tile_data = self.memory.borrow().get_range(tile_data_addr..tile_data_addr + 16);
+            
         }
     }
 }
