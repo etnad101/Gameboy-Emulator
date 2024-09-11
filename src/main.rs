@@ -12,8 +12,11 @@ mod utils;
 
 use std::error::Error;
 
-use simple_graphics::{display::{Color, Display, WHITE}, fonts::Font};
 use emulator::{debugger::DebugFlags, rom::Rom, Emulator};
+use simple_graphics::{
+    display::{Color, Display, WHITE},
+    fonts::Font,
+};
 
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
@@ -38,7 +41,7 @@ impl Palette {
 fn main() -> Result<(), Box<dyn Error>> {
     // Init windows
     let mut register_window = Display::new("Register View", 300, 300, true)?;
-    let mut background_map_window = Display::new("Register View", 32*8, 32*8, true)?;
+    let mut background_map_window = Display::new("BackgroundMap", 32 * 8, 32 * 8, true)?;
     let mut tile_window = Display::new("Tile Map", 128, 192, true)?;
     let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
     let font = Font::new("./fonts/retro-pixel-cute-mono.bdf").unwrap();
@@ -49,7 +52,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut emulator = Emulator::new(
         GRAY_PALETTE,
-        vec![DebugFlags::DumpMem, DebugFlags::DumpCallLog, DebugFlags::ShowTileMap, DebugFlags::ShowRegisters],
+        vec![
+            DebugFlags::DumpMem,
+            DebugFlags::DumpCallLog,
+            DebugFlags::ShowTileMap,
+            DebugFlags::ShowRegisters,
+        ],
         Some(&mut tile_window),
         Some(&mut register_window),
         Some(&mut background_map_window),

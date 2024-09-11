@@ -102,7 +102,10 @@ impl<'a> Debugger<'a> {
     }
 
     pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
-        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpCallLog) && !self.flags.contains(&DebugFlags::ShowRegisters)){
+        if (!self.active)
+            || (!self.flags.contains(&DebugFlags::DumpCallLog)
+                && !self.flags.contains(&DebugFlags::ShowRegisters))
+        {
             return;
         }
 
@@ -114,7 +117,10 @@ impl<'a> Debugger<'a> {
     }
 
     pub fn create_call_log_dump(&self) -> Option<String> {
-        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpCallLog) && !self.flags.contains(&DebugFlags::ShowRegisters)){
+        if (!self.active)
+            || (!self.flags.contains(&DebugFlags::DumpCallLog)
+                && !self.flags.contains(&DebugFlags::ShowRegisters))
+        {
             return None;
         }
         let mut log = String::from("CALL LOG\n------------------------------------\n");
@@ -282,14 +288,30 @@ impl<'a> Debugger<'a> {
             Some(ref mut window) => {
                 window.set_background(WHITE);
                 window.clear();
-                window.render_text(&format!("a:{:#04x}", registers.a), 5, 0).unwrap();
-                window.render_text(&format!("f:{:#010b}", registers.f), 65, 0).unwrap();
-                window.render_text(&format!("b:{:#04x}", registers.b), 5, 16).unwrap();
-                window.render_text(&format!("c:{:#04x}", registers.c), 65, 16).unwrap();
-                window.render_text(&format!("d:{:#04x}", registers.d), 5, 32).unwrap();
-                window.render_text(&format!("e:{:#04x}", registers.e), 65, 32).unwrap();
-                window.render_text(&format!("h:{:#04x}", registers.h), 5, 48).unwrap();
-                window.render_text(&format!("l:{:#04x}", registers.l), 65, 48).unwrap();
+                window
+                    .render_text(&format!("a:{:#04x}", registers.a), 5, 0)
+                    .unwrap();
+                window
+                    .render_text(&format!("f:{:#010b}", registers.f), 65, 0)
+                    .unwrap();
+                window
+                    .render_text(&format!("b:{:#04x}", registers.b), 5, 16)
+                    .unwrap();
+                window
+                    .render_text(&format!("c:{:#04x}", registers.c), 65, 16)
+                    .unwrap();
+                window
+                    .render_text(&format!("d:{:#04x}", registers.d), 5, 32)
+                    .unwrap();
+                window
+                    .render_text(&format!("e:{:#04x}", registers.e), 65, 32)
+                    .unwrap();
+                window
+                    .render_text(&format!("h:{:#04x}", registers.h), 5, 48)
+                    .unwrap();
+                window
+                    .render_text(&format!("l:{:#04x}", registers.l), 65, 48)
+                    .unwrap();
                 window.render_text(&call_log, 5, 60).unwrap();
                 window.render().unwrap()
             }
@@ -298,14 +320,65 @@ impl<'a> Debugger<'a> {
     }
 
     pub fn render_background_map(&mut self) {
-        for tile in 0..32*32 {
-            let lcdc = self.memory.borrow().read_u8(LCDRegister::LCDC as u16);
-            let tile_num_base: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
-            let tile_number_addr = tile_num_base + tile;
-            let tile_number = self.memory.borrow().read_u8(tile_number_addr);
-            let tile_data_addr = 0x8000 + (16 * tile_number as u16) as usize;
-            let tile_data = self.memory.borrow().get_range(tile_data_addr..tile_data_addr + 16);
-            
+        if (!self.active) || (!self.flags.contains(&DebugFlags::ShowTileMap)) {
+            return;
+        }
+        match self.background_map_window {
+            Some(ref mut window) => {
+                window.set_background(WHITE);
+                window.clear();
+                let mut tile_x = 0;
+                let mut tile_y = 0;
+                for tile in 0..32 * 32 {
+                    let lcdc = self.memory.borrow().read_u8(LCDRegister::LCDC as u16);
+                    let tile_num_base: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
+                    let tile_number_addr = tile_num_base + tile;
+                    let tile_number = self.memory.borrow().read_u8(tile_number_addr);
+                    let tile_data_addr = 0x8000 + (16 * tile_number as u16) as usize;
+                    println!(
+                        "num_base: {:#04x}, num_addr: {:#04x}, num: {:#04x}, data_addr: {:#04x}",
+                        tile_num_base, tile_number_addr, tile_number, tile_data_addr
+                    );
+                    let tile_data = self
+                        .memory
+                        .borrow()
+                        .get_range(tile_data_addr..tile_data_addr + 16)
+                        .unwrap();
+                    let mut pixel_x = tile_x * 8;
+                    let mut pixel_y = tile_y * 8;
+                    let mut i = 0;
+                    while i < 16 {
+                        let lo_byte = tile_data[i];
+                        let hi_byte = tile_data[i + 1];
+                        for bit in (0..8).rev() {
+                            let lo = ((lo_byte & (1 << bit)) >> bit) as u16;
+                            let hi = ((hi_byte & (1 << bit)) >> bit) as u16;
+                            let color_data: u8 = ((hi << 1) | lo) as u8;
+                            let color: Color = match color_data {
+                                0 => self.palette.c0,
+                                1 => self.palette.c1,
+                                2 => self.palette.c2,
+                                3 => self.palette.c3,
+                                _ => panic!("Should not have any other color here"),
+                            };
+                            window.draw_pixel(pixel_x, pixel_y, color).unwrap();
+                            pixel_x += 1;
+                        }
+                        i += 2;
+                        if (pixel_x % 8) == 0 {
+                            pixel_y += 1;
+                            pixel_x = tile_x * 8;
+                        }
+                    }
+                    tile_x += 1;
+                    if tile_x >= 32 {
+                        tile_x = 0;
+                        tile_y += 1;
+                    }
+                }
+                window.render().unwrap();
+            }
+            None => panic!("no window provided for background map"),
         }
     }
 }

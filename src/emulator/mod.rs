@@ -149,7 +149,10 @@ impl<'a> Emulator<'a> {
 
     pub fn update_debug_view(&mut self) {
         self.debugger.borrow_mut().render_tiles();
-        self.debugger.borrow_mut().render_register_window(self.cpu.get_registers());
+        self.debugger
+            .borrow_mut()
+            .render_register_window(self.cpu.get_registers());
+        self.debugger.borrow_mut().render_background_map()
     }
 
     fn _load_state(&mut self, test: &TestData) {

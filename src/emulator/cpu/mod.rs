@@ -1099,7 +1099,9 @@ impl<'a> Cpu<'a> {
             )
         };
 
-        self.debugger.borrow_mut().push_call_log(self.pc, code, &opcode_asm);
+        self.debugger
+            .borrow_mut()
+            .push_call_log(self.pc, code, &opcode_asm);
 
         // Execute instruction
         let mut skip_pc_increase = false;

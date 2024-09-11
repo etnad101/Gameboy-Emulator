@@ -4,9 +4,9 @@ use std::rc::Rc;
 
 use super::memory::MemoryBus;
 use super::{Debugger, LCDRegister};
-use simple_graphics::display::{Color, WHITE};
 use crate::Palette;
 use crate::{utils::BitOps, SCREEN_HEIGHT, SCREEN_WIDTH};
+use simple_graphics::display::{Color, WHITE};
 
 const CYCLES_PER_SCANLINE: usize = 456;
 
