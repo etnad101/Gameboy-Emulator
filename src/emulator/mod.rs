@@ -10,7 +10,7 @@ use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
 
 use cpu::Cpu;
 use debugger::{DebugFlags, Debugger};
-use errors::EmulatorError;
+use errors::{CpuError, EmulatorError};
 use memory::MemoryBus;
 use ppu::Ppu;
 use rom::Rom;
@@ -156,7 +156,7 @@ impl<'a> Emulator<'a> {
     }
 
     fn _load_state(&mut self, test: &TestData) {
-        self.cpu.load_state(&test.initial);
+        self.cpu._load_state(&test.initial);
         self.memory.borrow_mut().clear();
         for mem_state in test.initial.ram.iter().cloned() {
             let addr = mem_state[0];
@@ -166,26 +166,26 @@ impl<'a> Emulator<'a> {
     }
 
     fn _check_state(&self, test: &TestData) -> bool {
-        let (a, b, c, d, e, f, h, l, sp, pc) = self.cpu.get_state();
-        let equal = a == test.after.a
-            && b == test.after.b
-            && c == test.after.c
-            && d == test.after.d
-            && e == test.after.e
-            && f == test.after.f
-            && h == test.after.h
-            && l == test.after.l
-            && sp == test.after.sp
-            && pc == test.after.pc - 1;
+        let (a, b, c, d, e, f, h, l, sp, pc) = self.cpu._get_state();
+        let equal = a == test.final_name.a
+            && b == test.final_name.b
+            && c == test.final_name.c
+            && d == test.final_name.d
+            && e == test.final_name.e
+            && f == test.final_name.f
+            && h == test.final_name.h
+            && l == test.final_name.l
+            && sp == test.final_name.sp
+            && pc == test.final_name.pc;
 
-        for mem_state in test.after.ram.iter().cloned() {
+        for mem_state in test.final_name.ram.iter().cloned() {
             let addr = mem_state[0];
             let correct_value = mem_state[1] as u8;
             let mem_value = self.memory.borrow().read_u8(addr);
 
             if mem_value != correct_value && addr != 0xff04 {
                 print!(
-                    "addr: {}, val: {}, expected: {}",
+                    "addr: {:#06x}, val: {:#04x}, expected: {:#04x}",
                     addr, mem_value, correct_value
                 );
                 return false;
@@ -204,7 +204,7 @@ impl<'a> Emulator<'a> {
                 test.initial.l,
                 test.initial.f,
                 test.initial.sp,
-                test.initial.pc - 1
+                test.initial.pc
             );
             println!(
                 "  Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
@@ -212,16 +212,16 @@ impl<'a> Emulator<'a> {
             );
             println!(
                 "Expected: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
-                test.after.a,
-                test.after.b,
-                test.after.c,
-                test.after.d,
-                test.after.e,
-                test.after.h,
-                test.after.l,
-                test.after.f,
-                test.after.sp,
-                test.after.pc - 1
+                test.final_name.a,
+                test.final_name.b,
+                test.final_name.c,
+                test.final_name.d,
+                test.final_name.e,
+                test.final_name.h,
+                test.final_name.l,
+                test.final_name.f,
+                test.final_name.sp,
+                test.final_name.pc
             );
         }
         equal
@@ -244,14 +244,18 @@ impl<'a> Emulator<'a> {
             let mut passed = 0;
             println!("----------");
             println!("Testing {}", name);
-            for test in test_data {
+            'inner: for test in test_data {
                 current_test += 1;
                 std::io::stdout().flush().unwrap();
                 self._load_state(&test);
                 match self.cpu.execute_next_opcode() {
                     Ok(_) => (),
+                    Err(CpuError::OpcodeError(e)) => {
+                        println!("{}", e);
+                    }
                     Err(e) => {
-                        println!("{e}");
+                        println!("{}", e);
+                        break 'inner;
                     }
                 }
 

@@ -64,7 +64,7 @@ impl Opcode {
         let opcodes: Vec<Opcode> = vec![
             // Misc/Control instructions
             Opcode::new(0x00, "NOP", 1, 4, AddressingMode::None, AddressingMode::None),
-            Opcode::new(0x10, "STOP n8", 2, 4, AddressingMode::ImmediateU8, AddressingMode::None),
+            Opcode::new(0x10, "STOP", 1 /* Skips one byte after, look into this */, 4, AddressingMode::None, AddressingMode::None),
             Opcode::new(0x76, "HALT", 1, 4, AddressingMode::None, AddressingMode::None),
             Opcode::new(0xf3, "DI", 1, 4, AddressingMode::None, AddressingMode::None),
             Opcode::new(0xfb, "EI", 1, 4, AddressingMode::None, AddressingMode::None),
@@ -174,11 +174,11 @@ impl Opcode {
             Opcode::new(0x11, "LD DE, n16", 3, 12, AddressingMode::ImmediateRegister(Register::DE), AddressingMode::ImmediateU16),
             Opcode::new(0x21, "LD HL, n16", 3, 12, AddressingMode::ImmediateRegister(Register::HL), AddressingMode::ImmediateU16),
             Opcode::new(0x31, "LD SP, n16", 3, 12, AddressingMode::ImmediateRegister(Register::SP), AddressingMode::ImmediateU16),
-            Opcode::new(0xc1, "POP BC", 1, 16, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::None),
+            Opcode::new(0xc1, "POP BC", 1, 12, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::None),
             Opcode::new(0xc5, "PUSH BC", 1, 16, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::None),
-            Opcode::new(0xe1, "POP HL", 1, 16, AddressingMode::ImmediateRegister(Register::HL), AddressingMode::None),
+            Opcode::new(0xe1, "POP HL", 1, 12, AddressingMode::ImmediateRegister(Register::HL), AddressingMode::None),
             Opcode::new(0xe5, "PUSH HL", 1, 16, AddressingMode::ImmediateRegister(Register::HL), AddressingMode::None),
-            Opcode::new(0xf1, "POP AF", 1, 16, AddressingMode::ImmediateRegister(Register::AF), AddressingMode::None),
+            Opcode::new(0xf1, "POP AF", 1, 12, AddressingMode::ImmediateRegister(Register::AF), AddressingMode::None),
             Opcode::new(0xf5, "PUSH AF", 1, 16, AddressingMode::ImmediateRegister(Register::AF), AddressingMode::None),
             // 8-bit arithmetic/logical instructions
             Opcode::new(0x04, "INC B", 1, 4, AddressingMode::ImmediateRegister(Register::B), AddressingMode::None),

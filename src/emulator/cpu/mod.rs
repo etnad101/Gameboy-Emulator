@@ -111,16 +111,16 @@ impl<'a> Cpu<'a> {
                 Register::HL => DataType::Address(self.reg.hl()),
                 _ => todo!("Address_Register not implemented"),
             },
-            AddressingMode::ImmediateU8 => DataType::ValueU8(self.read_mem_u8(self.pc + 1)),
+            AddressingMode::ImmediateU8 => DataType::ValueU8(self.read_mem_u8(self.pc.wrapping_add(1))),
             AddressingMode::AddressHRAM => {
                 let hi: u16 = 0xFF << 8;
-                let lo: u16 = self.read_mem_u8(self.pc + 1) as u16;
+                let lo: u16 = self.read_mem_u8(self.pc.wrapping_add(1)) as u16;
                 let addr = hi | lo;
                 DataType::Address(addr)
             }
-            AddressingMode::ImmediateI8 => DataType::ValueI8(self.read_mem_u8(self.pc + 1) as i8),
-            AddressingMode::ImmediateU16 => DataType::ValueU16(self.read_mem_u16(self.pc + 1)),
-            AddressingMode::AddressU16 => DataType::Address(self.read_mem_u16(self.pc + 1)),
+            AddressingMode::ImmediateI8 => DataType::ValueI8(self.read_mem_u8(self.pc.wrapping_add(1)) as i8),
+            AddressingMode::ImmediateU16 => DataType::ValueU16(self.read_mem_u16(self.pc.wrapping_add(1))),
+            AddressingMode::AddressU16 => DataType::Address(self.read_mem_u16(self.pc.wrapping_add(1))),
             AddressingMode::IoAdressOffset => DataType::Address(0xFF00 + self.reg.c as u16),
             AddressingMode::None => DataType::None,
         }
@@ -393,7 +393,7 @@ impl<'a> Cpu<'a> {
         };
 
         if jump {
-            let res: i16 = (self.pc as i16) + offset as i16;
+            let res: i16 = (self.pc as i16).wrapping_add(offset as i16); 
             self.pc = res as u16;
         }
 
@@ -466,21 +466,20 @@ impl<'a> Cpu<'a> {
                 _ => panic!("Should only have an address here"),
             };
 
-            self.push_stack(self.pc);
+            self.push_stack(self.pc.wrapping_add(3));
             self.pc = addr;
         }
         extra_cycles
     }
 
     fn ret(&mut self, condition: Option<JumpCondition>, set_ime: bool) -> usize {
-        // add 3 to pc to account for CALL instruction size
         let jump = match condition {
             Some(JumpCondition::Z) => self.reg.get_z_flag() == 1,
             Some(JumpCondition::NZ) => self.reg.get_z_flag() == 0,
             Some(JumpCondition::C) => self.reg.get_c_flag() == 1,
             Some(JumpCondition::NC) => self.reg.get_c_flag() == 0,
             None => {
-                self.pc = self.pop_stack() + 3;
+                self.pc = self.pop_stack();
                 if set_ime {
                     self.write_mem_u8(0xFFFF, 0xFF);
                 }
@@ -489,7 +488,7 @@ impl<'a> Cpu<'a> {
         };
 
         if jump {
-            self.pc = self.pop_stack() + 3;
+            self.pc = self.pop_stack();
             return 12;
         } else {
             return 0;
@@ -511,8 +510,8 @@ impl<'a> Cpu<'a> {
         match addressing_mode {
             AddressingMode::ImmediateRegister(Register::AF) => self.reg.set_af(value),
             AddressingMode::ImmediateRegister(Register::BC) => self.reg.set_bc(value),
-            AddressingMode::ImmediateRegister(Register::DE) => self.reg.set_bc(value),
-            AddressingMode::ImmediateRegister(Register::HL) => self.reg.set_bc(value),
+            AddressingMode::ImmediateRegister(Register::DE) => self.reg.set_de(value),
+            AddressingMode::ImmediateRegister(Register::HL) => self.reg.set_hl(value),
             _ => panic!("Can only pop stack to 16 bit register"),
         }
     }
@@ -756,54 +755,40 @@ impl<'a> Cpu<'a> {
 
     fn add_sp_e8(&mut self, rhs: &AddressingMode) {
         let value = match self.get_data(rhs) {
-            DataType::ValueI8(val) => val as u8,
+            DataType::ValueI8(val) => val as i16,
             _ => panic!("Should only have an i8 here"),
         };
 
-        let positive = value.get_bit(7) == 0;
-        let mut half: bool;
-        let mut full: bool;
+        self.sp = (self.sp as i16).wrapping_add(value) as u16;
 
-        if positive {
-            let value = (value << 1) >> 1;
-            let lo = (self.sp & 0xFF) as u8;
-            let (res, half_carry, full_carry) = self.carry_track_add_u8(lo, value);
+        let full_carry: bool;
+        let half_carry: bool;
 
-            let mut hi = (self.sp >> 8) as u8;
-            if full_carry {
-                hi = hi.wrapping_add(1);
-            }
-            self.sp = ((hi as u16) << 8) | lo as u16;
-            half = half_carry;
-            full = full_carry
+        let lo = self.sp & 0xFF;
+
+        if value >= 0 {
+            full_carry = (lo + value as u16) > 255;
+            half_carry = (((lo as u8 & 0xF) + (value as u8 & 0xF)) & 0x10) == 0x10;
         } else {
-            let value = (value << 1) >> 1;
-            let lo = (self.sp & 0xFF) as u8;
-            let (res, half_carry, full_carry) = self.carry_track_sub_u8(lo, value);
-
-            let mut hi = (self.sp >> 8) as u8;
-            if full_carry {
-                hi = hi.wrapping_sub(1);
-            }
-            self.sp = ((hi as u16) << 8) | lo as u16;
-            half = half_carry;
-            full = full_carry
+            full_carry = value as u8 > lo as u8;
+            half_carry = lo as u8 & 0xF < (value as u8) & 0xF;
         }
 
         self.reg.clear_z_flag();
         self.reg.clear_n_flag();
 
-        if half {
+        if full_carry {
+            self.reg.set_c_flag();
+        } else {
+            self.reg.clear_c_flag();
+        }
+
+        if half_carry {
             self.reg.set_h_flag();
         } else {
             self.reg.clear_h_flag();
         }
 
-        if full {
-            self.reg.set_c_flag();
-        } else {
-            self.reg.clear_c_flag();
-        }
     }
 
     fn adc(&mut self, rhs: &AddressingMode) {
@@ -1074,7 +1059,7 @@ impl<'a> Cpu<'a> {
 
         let (opcode_asm, opcode_bytes, opcode_cycles, lhs, rhs) = {
             let opcode_set = if prefixed {
-                code = self.read_mem_u8(self.pc + 1);
+                code = self.read_mem_u8(self.pc.wrapping_add(1));
                 &self.prefixed_opcodes
             } else {
                 &self.normal_opcodes
@@ -1107,7 +1092,7 @@ impl<'a> Cpu<'a> {
         let mut skip_pc_increase = false;
         let mut extra_cycles: usize = 0;
         if prefixed {
-            code = self.read_mem_u8(self.pc + 1);
+            code = self.read_mem_u8(self.pc.wrapping_add(1));
             match code {
                 0x00..=0x07 => self.rotate(&lhs, Direction::Left, true, false),
                 0x08..=0x0f => self.rotate(&lhs, Direction::Right, true, false),
@@ -1145,6 +1130,7 @@ impl<'a> Cpu<'a> {
         } else {
             match code {
                 0x00 => (),
+                0x10 => (),
                 0x05 | 0x0d | 0x15 | 0x1d | 0x25 | 0x2d | 0x35 | 0x3d => self.decrement_u8(&lhs),
                 0x04 | 0x0c | 0x14 | 0x1c | 0x24 | 0x2c | 0x34 | 0x3c => self.increment_u8(&lhs),
                 0x03 | 0x13 | 0x23 | 0x33 => self.increment_u16(&lhs),
@@ -1196,16 +1182,13 @@ impl<'a> Cpu<'a> {
                     }
                 }
                 0xc1 | 0xe1 | 0xf1 => self.pop_stack_instr(&lhs),
-                0xc2 => {
-                    extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NZ));
+                0xc2 => extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NZ)),
+                0xc3 => _ = self.abs_jump(&lhs, None),
+                0xc4 => {
+                    extra_cycles = self.call(&rhs, Some(JumpCondition::NZ));
                     if extra_cycles > 0 {
                         skip_pc_increase = true;
                     }
-                }
-                0xc3 => _ = self.abs_jump(&lhs, None),
-                0xc4 => {
-                    skip_pc_increase = true;
-                    self.call(&rhs, Some(JumpCondition::NZ));
                 }
                 0xc5 | 0xe5 | 0xf5 => self.push_stack_instr(&lhs),
                 0xc8 => {
@@ -1223,7 +1206,10 @@ impl<'a> Cpu<'a> {
                     self.call(&lhs, None);
                 }
                 0xd0 => {
-                    self.ret(Some(JumpCondition::NC), false);
+                    extra_cycles = self.ret(Some(JumpCondition::NC), false);
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
                 }
                 0xd2 => {
                     extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NC));
@@ -1232,8 +1218,10 @@ impl<'a> Cpu<'a> {
                     }
                 }
                 0xd4 => {
-                    skip_pc_increase = true;
-                    self.call(&rhs, Some(JumpCondition::NC));
+                    extra_cycles = self.call(&rhs, Some(JumpCondition::NC));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
                 }
                 0x80..=0x87 | 0xc6 => self.add_a_u8(&rhs),
                 0x88..=0x8f | 0xce => self.adc(&rhs),
@@ -1251,12 +1239,12 @@ impl<'a> Cpu<'a> {
         };
 
         if !skip_pc_increase {
-            self.pc += opcode_bytes;
+            self.pc = self.pc.wrapping_add(opcode_bytes);
         }
         Ok(opcode_cycles + extra_cycles)
     }
 
-    pub fn load_state(&mut self, state: &State) {
+    pub fn _load_state(&mut self, state: &State) {
         self.reg.a = state.a;
         self.reg.b = state.b;
         self.reg.c = state.c;
@@ -1266,10 +1254,10 @@ impl<'a> Cpu<'a> {
         self.reg.h = state.h;
         self.reg.l = state.l;
         self.sp = state.sp;
-        self.pc = state.pc - 1;
+        self.pc = state.pc;
     }
 
-    pub fn get_state(&self) -> (u8, u8, u8, u8, u8, u8, u8, u8, u16, u16) {
+    pub fn _get_state(&self) -> (u8, u8, u8, u8, u8, u8, u8, u8, u16, u16) {
         (
             self.reg.a, self.reg.b, self.reg.c, self.reg.d, self.reg.e, self.reg.f, self.reg.h,
             self.reg.l, self.sp, self.pc,

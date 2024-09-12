@@ -33,7 +33,7 @@ impl Registers {
 
     pub fn set_af(&mut self, value: u16) {
         self.a = ((value & 0xFF00) >> 8) as u8;
-        self.f = (value & 0xFF) as u8;
+        self.f = (value & 0xF0) as u8;
     }
 
     pub fn bc(&self) -> u16 {

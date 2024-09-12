@@ -19,5 +19,6 @@ pub struct State {
 pub struct TestData {
     pub name: String,
     pub initial: State,
-    pub after: State,
+    #[serde(rename="final")]
+    pub final_name: State,
 }
