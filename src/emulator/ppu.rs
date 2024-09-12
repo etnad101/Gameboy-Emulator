@@ -6,7 +6,7 @@ use super::memory::MemoryBus;
 use super::{Debugger, LCDRegister};
 use crate::Palette;
 use crate::{utils::BitOps, SCREEN_HEIGHT, SCREEN_WIDTH};
-use simple_graphics::display::{Color, WHITE};
+use simple_graphics::display::{Color, BLACK, WHITE};
 
 const CYCLES_PER_SCANLINE: usize = 456;
 
@@ -133,11 +133,12 @@ impl<'a> Ppu<'a> {
         let ly = self.read_mem_u8(LCDRegister::LY as u16) as u16;
         let scx = self.read_mem_u8(LCDRegister::SCX as u16) as u16;
         let scy = self.read_mem_u8(LCDRegister::SCY as u16) as u16;
-
-        let mut tile_num_addr: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
-        tile_num_addr += self.fetcher_x as u16;
-        tile_num_addr += (scx / 8) & 0x1f;
-        tile_num_addr += 32 * (((ly + scy) & 0xFF) / 8);
+        let tile_map_base = ((lcdc >> 3) & 1) as u16;
+        let tile_num_addr = 0x9800 | (tile_map_base << 10) | ((((ly + scy) & 0xFF) >> 3) << 5) | (((self.scanline_x as u16) & 0xFF) >> 3);
+        // let mut tile_num_addr: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
+        // tile_num_addr += self.fetcher_x as u16;
+        // tile_num_addr += (scx / 8) & 0x1f;
+        // tile_num_addr += 32 * (((ly + scy) & 0xFF) / 8);
 
         self.read_mem_u8(tile_num_addr)
     }
@@ -230,8 +231,10 @@ impl<'a> Ppu<'a> {
                 }
                 PpuMode::HBlank => {
                     if self.current_scanline_cycles >= 456 {
+                        let scx = self.read_mem_u8(LCDRegister::SCX as u16) as u16;
                         self.scanline_has_reset = false;
                         self.scanline_x = 0;
+                        self.fetcher_x = scx as u8 >> 3;
                         self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
                         ly = ly.wrapping_add(1);
@@ -245,6 +248,7 @@ impl<'a> Ppu<'a> {
                 }
                 PpuMode::VBlank => {
                     if self.current_scanline_cycles >= 456 {
+                        let scx = self.read_mem_u8(LCDRegister::SCX as u16) as u16;
                         self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
                         ly = ly.wrapping_add(1);
