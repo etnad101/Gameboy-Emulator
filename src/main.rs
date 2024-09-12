@@ -1,5 +1,8 @@
 /*
 * TODO
+* Clean up code
+* Optimize so emulator runs faster
+* Add interrupts
 * Maybe change pc to work like how json tests describe
 * Create better debugger
 * Need support for palettes, tile data, background tile maps, vertical scrolling (register 0xFF42), and register @ 0xFF44
@@ -62,7 +65,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(&mut background_map_window),
     );
 
-    emulator.load_rom(dmg_acid2_rom)?;
+    emulator.load_rom(cpu_instrs_test_rom)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));

@@ -131,14 +131,10 @@ impl<'a> Ppu<'a> {
     fn get_tile_number(&mut self) -> u8 {
         let lcdc = self.read_mem_u8(LCDRegister::LCDC as u16);
         let ly = self.read_mem_u8(LCDRegister::LY as u16) as u16;
-        let scx = self.read_mem_u8(LCDRegister::SCX as u16) as u16;
         let scy = self.read_mem_u8(LCDRegister::SCY as u16) as u16;
+
         let tile_map_base = ((lcdc >> 3) & 1) as u16;
         let tile_num_addr = 0x9800 | (tile_map_base << 10) | ((((ly + scy) & 0xFF) >> 3) << 5) | (((self.scanline_x as u16) & 0xFF) >> 3);
-        // let mut tile_num_addr: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
-        // tile_num_addr += self.fetcher_x as u16;
-        // tile_num_addr += (scx / 8) & 0x1f;
-        // tile_num_addr += 32 * (((ly + scy) & 0xFF) / 8);
 
         self.read_mem_u8(tile_num_addr)
     }
@@ -248,7 +244,6 @@ impl<'a> Ppu<'a> {
                 }
                 PpuMode::VBlank => {
                     if self.current_scanline_cycles >= 456 {
-                        let scx = self.read_mem_u8(LCDRegister::SCX as u16) as u16;
                         self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
                         ly = ly.wrapping_add(1);
