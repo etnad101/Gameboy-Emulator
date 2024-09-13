@@ -430,7 +430,7 @@ impl<'a> Cpu<'a> {
                 _ => panic!("Should only have an address here"),
             };
 
-            self.pc = addr - 3;
+            self.pc = addr;
         }
 
         extra_cycles
@@ -759,19 +759,20 @@ impl<'a> Cpu<'a> {
             _ => panic!("Should only have an i8 here"),
         };
 
-        self.sp = (self.sp as i16).wrapping_add(value) as u16;
+        let s8 = (value&127)-(value&128);
+
+        let before = self.sp;
+        self.sp = (self.sp as i16).wrapping_add(value as i16) as u16;
 
         let full_carry: bool;
         let half_carry: bool;
 
-        let lo = self.sp & 0xFF;
-
         if value >= 0 {
-            full_carry = (lo + value as u16) > 255;
-            half_carry = (((lo as u8 & 0xF) + (value as u8 & 0xF)) & 0x10) == 0x10;
+            full_carry = ((before as i16 & 0xFF) + s8) > 0xFF;
+            half_carry = ((before as i16 & 0xF) + (s8 & 0xF)) > 0xF;
         } else {
-            full_carry = value as u8 > lo as u8;
-            half_carry = lo as u8 & 0xF < (value as u8) & 0xF;
+            full_carry = (self.sp & 0xFF) < (before & 0xFF);
+            half_carry = (self.sp & 0xF) < (before & 0xF);
         }
 
         self.reg.clear_z_flag();
@@ -788,7 +789,33 @@ impl<'a> Cpu<'a> {
         } else {
             self.reg.clear_h_flag();
         }
+    }
 
+    fn ld_hl_sp_e8(&mut self, rhs: &AddressingMode) {
+        let value = match self.get_data(rhs) {
+            DataType::ValueI8(val) => val as i16,
+            _ => panic!("Should only have an i8 here"),
+        };
+
+        self.reg.set_hl((self.sp as i16).wrapping_add(value) as u16);
+
+        let full_carry = ((self.sp as i16 & 0xFF) + (value & 0xFF)) > 0xFF;
+        let half_carry = ((self.sp as i16 & 0xF) + (value & 0xF)) > 0xF;
+
+        self.reg.clear_z_flag();
+        self.reg.clear_n_flag();
+
+        if full_carry {
+            self.reg.set_c_flag();
+        } else {
+            self.reg.clear_c_flag();
+        }
+
+        if half_carry {
+            self.reg.set_h_flag();
+        } else {
+            self.reg.clear_h_flag();
+        }
     }
 
     fn adc(&mut self, rhs: &AddressingMode) {
@@ -1052,6 +1079,11 @@ impl<'a> Cpu<'a> {
         }
     }
 
+    fn reset_vec(&mut self, lhs: u8) {
+        let addr: u16 = ((lhs as u16) << 8) | self.reg.h as u16;
+        self.pc = addr;
+    }
+
     pub fn execute_next_opcode(&mut self) -> Result<usize, CpuError> {
         // Get next instruction
         let mut code = self.read_mem_u8(self.pc);
@@ -1159,7 +1191,8 @@ impl<'a> Cpu<'a> {
                 | 0xe0
                 | 0xea
                 | 0x77..=0x7f
-                | 0xf0 => self.load_or_store_value(&lhs, &rhs, None),
+                | 0xf0
+                | 0xfa => self.load_or_store_value(&lhs, &rhs, None),
                 0x27 => self.daa(),
                 0x22 | 0x2a => self.load_or_store_value(&lhs, &rhs, Some(StoreLoadModifier::IncHL)),
                 0x32 | 0x3a => self.load_or_store_value(&lhs, &rhs, Some(StoreLoadModifier::DecHL)),
@@ -1181,16 +1214,24 @@ impl<'a> Cpu<'a> {
                         skip_pc_increase = true;
                     }
                 }
-                0xc1 | 0xe1 | 0xf1 => self.pop_stack_instr(&lhs),
-                0xc2 => extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NZ)),
-                0xc3 => _ = self.abs_jump(&lhs, None),
+                0xc1 | 0xd1 | 0xe1 | 0xf1 => self.pop_stack_instr(&lhs),
+                0xc2 => {
+                    extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::NZ));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                },
+                0xc3 | 0xe9 => {
+                    skip_pc_increase = true;
+                    _ = self.abs_jump(&lhs, None);
+                }
                 0xc4 => {
                     extra_cycles = self.call(&rhs, Some(JumpCondition::NZ));
                     if extra_cycles > 0 {
                         skip_pc_increase = true;
                     }
                 }
-                0xc5 | 0xe5 | 0xf5 => self.push_stack_instr(&lhs),
+                0xc5 | 0xd5 | 0xe5 | 0xf5 => self.push_stack_instr(&lhs),
                 0xc8 => {
                     extra_cycles = self.ret(Some(JumpCondition::Z), false);
                     if extra_cycles > 0 {
@@ -1232,6 +1273,7 @@ impl<'a> Cpu<'a> {
                 0xb0..=0xb7 | 0xf6 => self.or_with_a(&rhs),
                 0xb8..=0xbf | 0xfe => self.sub_a(&rhs, false),
                 0xe8 => self.add_sp_e8(&rhs),
+                0xf8 => self.ld_hl_sp_e8(&rhs),
                 0xf3 => self.ime = true,
                 0xfb => self.ime = false,
                 _ => return Err(self.crash(CpuError::OpcodeNotImplemented(code, false))),

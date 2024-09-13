@@ -83,6 +83,7 @@ impl Opcode {
             Opcode::new(0xcd, "CALL a16", 3, 24, AddressingMode::AddressU16, AddressingMode::None),
             Opcode::new(0xd0, "RET NZ", 1, 8, /* + 12 if taken */ AddressingMode::None, AddressingMode::None),
             Opcode::new(0xd4, "CALL NC, a16", 3, 12 /* + 12 if taken */, AddressingMode::None, AddressingMode::AddressU16),
+            Opcode::new(0xe9, "JP [HL]", 1, 4, AddressingMode::AddressRegister(Register::HL), AddressingMode::None),
             // 8-bit load instructions
             Opcode::new(0x02, "LD [BC], A", 1, 8, AddressingMode::AddressRegister(Register::BC), AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0x06, "LD B, n8", 2, 8, AddressingMode::ImmediateRegister(Register::B), AddressingMode::ImmediateU8),
@@ -167,7 +168,7 @@ impl Opcode {
             Opcode::new(0xe2, "LD [C], A", 1, 8, AddressingMode::IoAdressOffset, AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0xea, "LD [a16], A", 3, 16, AddressingMode::AddressU16, AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0xf0, "LDH A, [a8]", 2, 12, AddressingMode::ImmediateRegister(Register::A), AddressingMode::AddressHRAM),
-            Opcode::new(0x77, "LD [HL], A", 1, 8, AddressingMode::AddressRegister(Register::HL), AddressingMode::ImmediateRegister(Register::A),),
+            Opcode::new(0xfa, "LD A, a16", 3, 16, AddressingMode::ImmediateRegister(Register::A), AddressingMode::AddressU16),
             // 16-bit load instructions
             Opcode::new(0x01, "LD BC, n16", 3, 12, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::ImmediateU16),
             Opcode::new(0x08, "LD [a16], SP", 3, 20, AddressingMode::AddressU16, AddressingMode::ImmediateRegister(Register::SP)),
@@ -176,10 +177,13 @@ impl Opcode {
             Opcode::new(0x31, "LD SP, n16", 3, 12, AddressingMode::ImmediateRegister(Register::SP), AddressingMode::ImmediateU16),
             Opcode::new(0xc1, "POP BC", 1, 12, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::None),
             Opcode::new(0xc5, "PUSH BC", 1, 16, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::None),
+            Opcode::new(0xd1, "POP DE", 1, 12, AddressingMode::ImmediateRegister(Register::DE), AddressingMode::None),
+            Opcode::new(0xd5, "PUSH DE", 1, 16, AddressingMode::ImmediateRegister(Register::DE), AddressingMode::None),
             Opcode::new(0xe1, "POP HL", 1, 12, AddressingMode::ImmediateRegister(Register::HL), AddressingMode::None),
             Opcode::new(0xe5, "PUSH HL", 1, 16, AddressingMode::ImmediateRegister(Register::HL), AddressingMode::None),
             Opcode::new(0xf1, "POP AF", 1, 12, AddressingMode::ImmediateRegister(Register::AF), AddressingMode::None),
             Opcode::new(0xf5, "PUSH AF", 1, 16, AddressingMode::ImmediateRegister(Register::AF), AddressingMode::None),
+            Opcode::new(0xf8, "LD HL, SP+e8", 2, 12, AddressingMode::ImmediateRegister(Register::HL), AddressingMode::ImmediateI8),
             // 8-bit arithmetic/logical instructions
             Opcode::new(0x04, "INC B", 1, 4, AddressingMode::ImmediateRegister(Register::B), AddressingMode::None),
             Opcode::new(0x05, "DEC B", 1, 4, AddressingMode::ImmediateRegister(Register::B), AddressingMode::None),
