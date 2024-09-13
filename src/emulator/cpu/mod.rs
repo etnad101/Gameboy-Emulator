@@ -420,8 +420,21 @@ impl<'a> Cpu<'a> {
                     (false, 0)
                 }
             }
+            Some(JumpCondition::Z) => {
+                if self.reg.get_z_flag() == 1 {
+                    (true, 4)
+                } else {
+                    (false, 0)
+                }
+            }
+            Some(JumpCondition::C) => {
+                if self.reg.get_c_flag() == 1 {
+                    (true, 4)
+                } else {
+                    (false, 0)
+                }
+            }
             None => (true, 0),
-            _ => panic!("No other conditions"),
         };
 
         if jump {
@@ -456,8 +469,21 @@ impl<'a> Cpu<'a> {
                     (false, 0)
                 }
             }
+            Some(JumpCondition::Z) => {
+                if self.reg.get_z_flag() == 1 {
+                    (true, 12)
+                } else {
+                    (false, 0)
+                }
+            }
+            Some(JumpCondition::C) => {
+                if self.reg.get_c_flag() == 1 {
+                    (true, 12)
+                } else {
+                    (false, 0)
+                }
+            }
             None => (true, 0),
-            _ => panic!("No other conditions"),
         };
 
         if jump {
@@ -1079,8 +1105,8 @@ impl<'a> Cpu<'a> {
         }
     }
 
-    fn reset_vec(&mut self, lhs: u8) {
-        let addr: u16 = ((lhs as u16) << 8) | self.reg.h as u16;
+    fn reset_vec(&mut self, addr: u16) {
+        self.push_stack(self.pc.wrapping_add(1));
         self.pc = addr;
     }
 
@@ -1192,6 +1218,8 @@ impl<'a> Cpu<'a> {
                 | 0xea
                 | 0x77..=0x7f
                 | 0xf0
+                | 0xf2
+                | 0xf9
                 | 0xfa => self.load_or_store_value(&lhs, &rhs, None),
                 0x27 => self.daa(),
                 0x22 | 0x2a => self.load_or_store_value(&lhs, &rhs, Some(StoreLoadModifier::IncHL)),
@@ -1242,6 +1270,18 @@ impl<'a> Cpu<'a> {
                     skip_pc_increase = true;
                     self.ret(None, false);
                 }
+                0xca => {
+                    extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::Z));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                }
+                0xcc => {
+                    extra_cycles = self.call(&rhs, Some(JumpCondition::Z));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                }
                 0xcd => {
                     skip_pc_increase = true;
                     self.call(&lhs, None);
@@ -1264,6 +1304,28 @@ impl<'a> Cpu<'a> {
                         skip_pc_increase = true;
                     }
                 }
+                0xd8 => {
+                    extra_cycles = self.ret(Some(JumpCondition::C), false);
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                }
+                0xd9 => {
+                    skip_pc_increase = true;
+                    extra_cycles = self.ret(None, true);
+                }
+                0xda => {
+                    extra_cycles = self.abs_jump(&rhs, Some(JumpCondition::C));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                }
+                0xdc => {
+                    extra_cycles = self.call(&rhs, Some(JumpCondition::C));
+                    if extra_cycles > 0 {
+                        skip_pc_increase = true;
+                    }
+                }
                 0x80..=0x87 | 0xc6 => self.add_a_u8(&rhs),
                 0x88..=0x8f | 0xce => self.adc(&rhs),
                 0x90..=0x97 | 0xd6 => self.sub_a(&rhs, true),
@@ -1272,6 +1334,38 @@ impl<'a> Cpu<'a> {
                 0xa8..=0xaf | 0xee => self.xor_with_a(&rhs),
                 0xb0..=0xb7 | 0xf6 => self.or_with_a(&rhs),
                 0xb8..=0xbf | 0xfe => self.sub_a(&rhs, false),
+                0xc7 => {
+                    skip_pc_increase = true;
+                    self.reset_vec(0x0000);
+                },
+                0xcf => {
+                    skip_pc_increase = true;
+                    self.reset_vec(0x0008)
+                },
+                0xd7 => {
+                    skip_pc_increase = true;
+                    self.reset_vec(0x0010)
+                },
+                0xdf => {
+                    skip_pc_increase = true;
+                    self.reset_vec(0x0018)
+                },
+                0xe7 => {
+                    skip_pc_increase = true;
+                    self.reset_vec(0x0020)
+                },
+                0xef => {
+                    skip_pc_increase = true;
+                    self.reset_vec(0x0028)
+                },
+                0xf7 => {
+                    skip_pc_increase = true;
+                    self.reset_vec(0x0030)
+                },
+                0xff => {
+                    skip_pc_increase = true;
+                    self.reset_vec(0x0038)
+                },
                 0xe8 => self.add_sp_e8(&rhs),
                 0xf8 => self.ld_hl_sp_e8(&rhs),
                 0xf3 => self.ime = true,
