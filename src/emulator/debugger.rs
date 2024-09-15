@@ -254,10 +254,10 @@ impl<'a> Debugger<'a> {
                     let mut pixel_y = tile_y * 8;
                     for data in tile_data {
                         let color: Color = match data {
-                            0 => self.palette.c0,
-                            1 => self.palette.c1,
-                            2 => self.palette.c2,
-                            3 => self.palette.c3,
+                            0 => self.palette.0,
+                            1 => self.palette.1,
+                            2 => self.palette.2,
+                            3 => self.palette.3,
                             _ => panic!("Should not have any other color here"),
                         };
                         window.draw_pixel(pixel_x, pixel_y, color).unwrap();
@@ -286,33 +286,34 @@ impl<'a> Debugger<'a> {
         let call_log = self.create_call_log_dump().unwrap();
         match self.register_window {
             Some(ref mut window) => {
-                window.set_background(WHITE);
+                window.set_background(self.palette.0);
                 window.clear();
+                let text_color = self.palette.3;
                 window
-                    .render_text(&format!("a:{:#04x}", registers.a), 5, 0)
+                    .render_text(&format!("a:{:#04x}", registers.a), text_color, 5, 0)
                     .unwrap();
                 window
-                    .render_text(&format!("f:{:#010b}", registers.f), 65, 0)
+                    .render_text(&format!("f:{:#010b}", registers.f), text_color, 65, 0)
                     .unwrap();
                 window
-                    .render_text(&format!("b:{:#04x}", registers.b), 5, 16)
+                    .render_text(&format!("b:{:#04x}", registers.b), text_color, 5, 16)
                     .unwrap();
                 window
-                    .render_text(&format!("c:{:#04x}", registers.c), 65, 16)
+                    .render_text(&format!("c:{:#04x}", registers.c), text_color, 65, 16)
                     .unwrap();
                 window
-                    .render_text(&format!("d:{:#04x}", registers.d), 5, 32)
+                    .render_text(&format!("d:{:#04x}", registers.d), text_color, 5, 32)
                     .unwrap();
                 window
-                    .render_text(&format!("e:{:#04x}", registers.e), 65, 32)
+                    .render_text(&format!("e:{:#04x}", registers.e), text_color, 65, 32)
                     .unwrap();
                 window
-                    .render_text(&format!("h:{:#04x}", registers.h), 5, 48)
+                    .render_text(&format!("h:{:#04x}", registers.h), text_color, 5, 48)
                     .unwrap();
                 window
-                    .render_text(&format!("l:{:#04x}", registers.l), 65, 48)
+                    .render_text(&format!("l:{:#04x}", registers.l), text_color, 65, 48)
                     .unwrap();
-                window.render_text(&call_log, 5, 60).unwrap();
+                window.render_text(&call_log, text_color, 5, 60).unwrap();
                 window.render().unwrap()
             }
             None => panic!("Must provide window for register data to be drawn to"),
@@ -325,7 +326,7 @@ impl<'a> Debugger<'a> {
         }
         match self.background_map_window {
             Some(ref mut window) => {
-                window.set_background(WHITE);
+                window.set_background(self.palette.0);
                 window.clear();
                 let mut tile_x = 0;
                 let mut tile_y = 0;
@@ -351,10 +352,10 @@ impl<'a> Debugger<'a> {
                             let hi = ((hi_byte & (1 << bit)) >> bit) as u16;
                             let color_data: u8 = ((hi << 1) | lo) as u8;
                             let color: Color = match color_data {
-                                0 => self.palette.c0,
-                                1 => self.palette.c1,
-                                2 => self.palette.c2,
-                                3 => self.palette.c3,
+                                0 => self.palette.0,
+                                1 => self.palette.1,
+                                2 => self.palette.2,
+                                3 => self.palette.3,
                                 _ => panic!("Should not have any other color here"),
                             };
                             window.draw_pixel(pixel_x, pixel_y, color).unwrap();

@@ -111,16 +111,24 @@ impl<'a> Cpu<'a> {
                 Register::HL => DataType::Address(self.reg.hl()),
                 _ => todo!("Address_Register not implemented"),
             },
-            AddressingMode::ImmediateU8 => DataType::ValueU8(self.read_mem_u8(self.pc.wrapping_add(1))),
+            AddressingMode::ImmediateU8 => {
+                DataType::ValueU8(self.read_mem_u8(self.pc.wrapping_add(1)))
+            }
             AddressingMode::AddressHRAM => {
                 let hi = 0xFF00;
                 let lo: u16 = self.read_mem_u8(self.pc.wrapping_add(1)) as u16;
                 let addr = hi + lo;
                 DataType::Address(addr)
             }
-            AddressingMode::ImmediateI8 => DataType::ValueI8(self.read_mem_u8(self.pc.wrapping_add(1)) as i8),
-            AddressingMode::ImmediateU16 => DataType::ValueU16(self.read_mem_u16(self.pc.wrapping_add(1))),
-            AddressingMode::AddressU16 => DataType::Address(self.read_mem_u16(self.pc.wrapping_add(1))),
+            AddressingMode::ImmediateI8 => {
+                DataType::ValueI8(self.read_mem_u8(self.pc.wrapping_add(1)) as i8)
+            }
+            AddressingMode::ImmediateU16 => {
+                DataType::ValueU16(self.read_mem_u16(self.pc.wrapping_add(1)))
+            }
+            AddressingMode::AddressU16 => {
+                DataType::Address(self.read_mem_u16(self.pc.wrapping_add(1)))
+            }
             AddressingMode::IoAddressOffset => DataType::Address(0xFF00 | (self.reg.c as u16)),
             AddressingMode::None => DataType::None,
         }
@@ -393,7 +401,7 @@ impl<'a> Cpu<'a> {
         };
 
         if jump {
-            let res: i16 = (self.pc as i16).wrapping_add(offset as i16); 
+            let res: i16 = (self.pc as i16).wrapping_add(offset as i16);
             self.pc = res as u16;
         }
 
@@ -785,7 +793,7 @@ impl<'a> Cpu<'a> {
             _ => panic!("Should only have an i8 here"),
         };
 
-        let s8 = (value&127)-(value&128);
+        let s8 = (value & 127) - (value & 128);
 
         let before = self.sp;
         self.sp = (self.sp as i16).wrapping_add(value as i16) as u16;
@@ -1248,7 +1256,7 @@ impl<'a> Cpu<'a> {
                     if extra_cycles > 0 {
                         skip_pc_increase = true;
                     }
-                },
+                }
                 0xc3 | 0xe9 => {
                     skip_pc_increase = true;
                     _ = self.abs_jump(&lhs, None);
@@ -1337,35 +1345,35 @@ impl<'a> Cpu<'a> {
                 0xc7 => {
                     skip_pc_increase = true;
                     self.reset_vec(0x0000);
-                },
+                }
                 0xcf => {
                     skip_pc_increase = true;
                     self.reset_vec(0x0008)
-                },
+                }
                 0xd7 => {
                     skip_pc_increase = true;
                     self.reset_vec(0x0010)
-                },
+                }
                 0xdf => {
                     skip_pc_increase = true;
                     self.reset_vec(0x0018)
-                },
+                }
                 0xe7 => {
                     skip_pc_increase = true;
                     self.reset_vec(0x0020)
-                },
+                }
                 0xef => {
                     skip_pc_increase = true;
                     self.reset_vec(0x0028)
-                },
+                }
                 0xf7 => {
                     skip_pc_increase = true;
                     self.reset_vec(0x0030)
-                },
+                }
                 0xff => {
                     skip_pc_increase = true;
                     self.reset_vec(0x0038)
-                },
+                }
                 0xe8 => self.add_sp_e8(&rhs),
                 0xf8 => self.ld_hl_sp_e8(&rhs),
                 0xf3 => self.ime = true,

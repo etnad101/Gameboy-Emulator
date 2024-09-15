@@ -134,7 +134,10 @@ impl<'a> Ppu<'a> {
         let scy = self.read_mem_u8(LCDRegister::SCY as u16) as u16;
 
         let tile_map_base = ((lcdc >> 3) & 1) as u16;
-        let tile_num_addr = 0x9800 | (tile_map_base << 10) | ((((ly + scy) & 0xFF) >> 3) << 5) | (((self.scanline_x as u16) & 0xFF) >> 3);
+        let tile_num_addr = 0x9800
+            | (tile_map_base << 10)
+            | ((((ly + scy) & 0xFF) >> 3) << 5)
+            | (((self.scanline_x as u16) & 0xFF) >> 3);
 
         self.read_mem_u8(tile_num_addr)
     }
@@ -158,10 +161,10 @@ impl<'a> Ppu<'a> {
             let hi = ((self.hi_byte & (1 << bit)) >> bit) as u16;
             let data: u8 = ((hi << 1) | lo) as u8;
             let color: Color = match data {
-                0 => self.palette.c0,
-                1 => self.palette.c1,
-                2 => self.palette.c2,
-                3 => self.palette.c3,
+                0 => self.palette.0,
+                1 => self.palette.1,
+                2 => self.palette.2,
+                3 => self.palette.3,
                 _ => panic!("Should not have any other color here"),
             };
             self.background_fifo.push(color);
@@ -227,10 +230,10 @@ impl<'a> Ppu<'a> {
                 }
                 PpuMode::HBlank => {
                     if self.current_scanline_cycles >= 456 {
-                        let scx = self.read_mem_u8(LCDRegister::SCX as u16) as u16;
+                        let scx = self.read_mem_u8(LCDRegister::SCX as u16);
                         self.scanline_has_reset = false;
                         self.scanline_x = 0;
-                        self.fetcher_x = scx as u8 >> 3;
+                        self.fetcher_x = scx >> 3;
                         self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
                         ly = ly.wrapping_add(1);

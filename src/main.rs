@@ -1,11 +1,10 @@
 /*
 * TODO
+* Add object drawing
 * Clean up code
 * Optimize so emulator runs faster
 * Add interrupts
-* Maybe change pc to work like how json tests describe
-* Create better debugger
-* Need support for palettes, tile data, background tile maps, vertical scrolling (register 0xFF42), and register @ 0xFF44
+* Add Memory bank switching
 * Implement timer
 */
 
@@ -21,25 +20,14 @@ use simple_graphics::{
     fonts::Font,
 };
 
+type Palette = (Color, Color, Color, Color);
+
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
-const GREEN_PALETTE: Palette = Palette::new(0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
-const GRAY_PALETTE: Palette = Palette::new(0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
+const GREEN_PALETTE: Palette = (0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
+const GRAY_PALETTE: Palette = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
 
-#[derive(Clone, Copy)]
-struct Palette {
-    c0: Color,
-    c1: Color,
-    c2: Color,
-    c3: Color,
-}
-
-impl Palette {
-    pub const fn new(c0: Color, c1: Color, c2: Color, c3: Color) -> Self {
-        Self { c0, c1, c2, c3 }
-    }
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Init windows
@@ -65,10 +53,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _cpu_11 = Rom::from("./roms/tests/cpu_instrs/individual/11-op a,(hl).gb")?; // pass
     let _instr_timing = Rom::from("./roms/tests/instr_timing/instr_timing.gb")?;
     let _tetris = Rom::from("./roms/games/tetris.gb")?;
-
+    let _dr_mario = Rom::from("./roms/games/Dr. Mario (World).gb")?;
 
     let mut emulator = Emulator::new(
-        GRAY_PALETTE,
+        GREEN_PALETTE,
         vec![
             DebugFlags::DumpMem,
             DebugFlags::DumpCallLog,
@@ -80,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(&mut background_map_window),
     );
 
-    emulator.load_rom(_tetris)?;
+    emulator.load_rom(_dmg_acid2_rom)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
