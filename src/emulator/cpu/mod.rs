@@ -113,15 +113,15 @@ impl<'a> Cpu<'a> {
             },
             AddressingMode::ImmediateU8 => DataType::ValueU8(self.read_mem_u8(self.pc.wrapping_add(1))),
             AddressingMode::AddressHRAM => {
-                let hi: u16 = 0xFF << 8;
+                let hi = 0xFF00;
                 let lo: u16 = self.read_mem_u8(self.pc.wrapping_add(1)) as u16;
-                let addr = hi | lo;
+                let addr = hi + lo;
                 DataType::Address(addr)
             }
             AddressingMode::ImmediateI8 => DataType::ValueI8(self.read_mem_u8(self.pc.wrapping_add(1)) as i8),
             AddressingMode::ImmediateU16 => DataType::ValueU16(self.read_mem_u16(self.pc.wrapping_add(1))),
             AddressingMode::AddressU16 => DataType::Address(self.read_mem_u16(self.pc.wrapping_add(1))),
-            AddressingMode::IoAdressOffset => DataType::Address(0xFF00 + self.reg.c as u16),
+            AddressingMode::IoAddressOffset => DataType::Address(0xFF00 | (self.reg.c as u16)),
             AddressingMode::None => DataType::None,
         }
     }
@@ -201,7 +201,7 @@ impl<'a> Cpu<'a> {
                 }
             }
             AddressingMode::AddressU16
-            | AddressingMode::IoAdressOffset
+            | AddressingMode::IoAddressOffset
             | AddressingMode::AddressHRAM => {
                 let addr: u16 = match self.get_data(lhs) {
                     DataType::Address(addr) => addr,
@@ -339,7 +339,7 @@ impl<'a> Cpu<'a> {
             _ => panic!("Should only have value from 16 bit register here"),
         };
 
-        byte -= 1;
+        byte = byte.wrapping_sub(1);
 
         match addressing_mode {
             AddressingMode::ImmediateRegister(Register::BC) => self.reg.set_bc(byte),

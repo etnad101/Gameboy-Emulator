@@ -27,7 +27,7 @@ pub enum AddressingMode {
     ImmediateI8,
     ImmediateU16,
     AddressU16,
-    IoAdressOffset,
+    IoAddressOffset,
     None,
 }
 
@@ -180,10 +180,10 @@ impl Opcode {
             Opcode::new(0x7e, "LD A, [HL]", 1, 8, AddressingMode::ImmediateRegister(Register::A), AddressingMode::AddressRegister(Register::HL)),
             Opcode::new(0x7f, "LD A, A", 1, 4, AddressingMode::ImmediateRegister(Register::A), AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0xe0, "LDH [a8], A", 2, 12, AddressingMode::AddressHRAM, AddressingMode::ImmediateRegister(Register::A)),
-            Opcode::new(0xe2, "LD [C], A", 1, 8, AddressingMode::IoAdressOffset, AddressingMode::ImmediateRegister(Register::A)),
+            Opcode::new(0xe2, "LD [C], A", 1, 8, AddressingMode::IoAddressOffset, AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0xea, "LD [a16], A", 3, 16, AddressingMode::AddressU16, AddressingMode::ImmediateRegister(Register::A)),
             Opcode::new(0xf0, "LDH A, [a8]", 2, 12, AddressingMode::ImmediateRegister(Register::A), AddressingMode::AddressHRAM),
-            Opcode::new(0xf2, "LD A, [C]", 1, 8, AddressingMode::ImmediateRegister(Register::A), AddressingMode::IoAdressOffset),
+            Opcode::new(0xf2, "LD A, [C]", 1, 8, AddressingMode::ImmediateRegister(Register::A), AddressingMode::IoAddressOffset),
             Opcode::new(0xfa, "LD A, a16", 3, 16, AddressingMode::ImmediateRegister(Register::A), AddressingMode::AddressU16),
             // 16-bit load instructions
             Opcode::new(0x01, "LD BC, n16", 3, 12, AddressingMode::ImmediateRegister(Register::BC), AddressingMode::ImmediateU16),

@@ -50,9 +50,10 @@ pub struct Emulator<'a> {
     ppu: Ppu<'a>,
     memory: Rc<RefCell<MemoryBus>>,
     debugger: Rc<RefCell<Debugger<'a>>>,
-    timer_cycles: u32,
+    timer_cycles: usize,
     frames: usize,
     uptime_s: usize,
+    paused: bool,
 }
 
 impl<'a> Emulator<'a> {
@@ -83,6 +84,7 @@ impl<'a> Emulator<'a> {
             timer_cycles: 0,
             frames: 0,
             uptime_s: 0,
+            paused: false,
         }
     }
 
@@ -97,9 +99,9 @@ impl<'a> Emulator<'a> {
         }
     }
 
-    fn update_timers(&mut self, cycles: u32) {
+    fn update_timers(&mut self, cycles: usize) {
         self.timer_cycles += cycles;
-        if self.timer_cycles as usize >= DIV_UPDATE_FREQ {
+        if self.timer_cycles >= DIV_UPDATE_FREQ {
             let addr = Timer::DIV as u16;
             let div = self.memory.borrow().read_u8(addr);
             self.memory.borrow_mut().write_u8(addr, div);
@@ -125,7 +127,7 @@ impl<'a> Emulator<'a> {
 
             cycles_this_frame += cycles;
 
-            // self.update_timers(cycles);
+            self.update_timers(cycles);
 
             self.ppu.update_graphics(cycles);
 
@@ -133,18 +135,6 @@ impl<'a> Emulator<'a> {
         }
 
         Ok(self.ppu.get_frame())
-    }
-
-    pub fn set_vram(&mut self, tile_num: u16) {
-        let base = 0x8000;
-        let tile = vec![
-            0xFF, 0x00, 0x7E, 0xFF, 0x85, 0x81, 0x89, 0x83, 0x93, 0x85, 0xA5, 0x8B, 0xC9, 0x97,
-            0x7E, 0xFF,
-        ];
-        for byte in 0..16 {
-            let addr = base + (tile_num * 16) + byte;
-            self.memory.borrow_mut().write_u8(addr, tile[byte as usize]);
-        }
     }
 
     pub fn update_debug_view(&mut self) {
