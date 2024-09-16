@@ -54,6 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _instr_timing = Rom::from("./roms/tests/instr_timing/instr_timing.gb")?;
     let _tetris = Rom::from("./roms/games/tetris.gb")?;
     let _dr_mario = Rom::from("./roms/games/Dr. Mario (World).gb")?;
+    // let _bubble_bobble = Rom::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
 
     let mut emulator = Emulator::new(
         GREEN_PALETTE,
@@ -68,7 +69,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(&mut background_map_window),
     );
 
-    emulator.load_rom(_dmg_acid2_rom)?;
+    emulator.load_rom(_dr_mario)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
