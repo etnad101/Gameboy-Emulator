@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Some(&mut background_map_window),
     );
 
-    emulator.load_rom(_dmg_acid2_rom)?;
+    emulator.load_rom(_dr_mario)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
