@@ -144,16 +144,16 @@ impl<'a> Ppu<'a> {
     }
 
     fn get_tile_data_low(&mut self) -> u8 {
+        let lcdc = self.read_mem_u8(LCDRegister::LCDC as u16) as u16;
         let ly = self.read_mem_u8(LCDRegister::LY as u16) as u16;
         let scy = self.read_mem_u8(LCDRegister::SCY as u16) as u16;
-        // bit 12  = !((LCDC & $10) || (tileID & $80))
-        self.tile_addr = 0x8000 + (16 * self.tile_number as u16);
-        self.tile_addr += 2 * ((ly + scy) % 8);
+        let bit_12 = if !(((lcdc & 0x10) > 0) || ((self.tile_number & 0x80)) > 0) {1} else {0};
+        self.tile_addr = 0x8000 | (bit_12 << 12) | ((self.tile_number as u16) << 4) | (((ly + scy) % 8) << 1); 
         self.read_mem_u8(self.tile_addr)
     }
 
     fn get_tile_data_high(&mut self) -> u8 {
-        self.read_mem_u8(self.tile_addr + 1)
+        self.read_mem_u8(self.tile_addr | 1)
     }
 
     fn push_to_fifo(&mut self) {
