@@ -34,8 +34,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let mut register_window = Display::new("Register View", 300, 300, true)?;
     // let font = Font::new("./fonts/retro-pixel-cute-mono.bdf").unwrap();
     // register_window.set_font(font);
-    // let mut background_map_window = Display::new("BackgroundMap", 32 * 8, 32 * 8, true)?;
-    // let mut tile_window = Display::new("Tile Map", 128, 192, true)?;
+    let mut background_map_window = Display::new("BackgroundMap", 32 * 8, 32 * 8, true)?;
+    let mut tile_window = Display::new("Tile Map", 128, 192, true)?;
     let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
 
     let _dmg_acid2_rom = Rom::from("./roms/tests/dmg-acid2.gb")?; // fail
@@ -61,21 +61,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         vec![
             DebugFlags::DumpMem,
             DebugFlags::DumpCallLog,
-            // DebugFlags::ShowTileMap,
+            DebugFlags::ShowTileMap,
             // DebugFlags::ShowRegisters,
         ],
+        Some(&mut tile_window),
         None,
-        None,
-        None, 
+        Some(&mut background_map_window), 
     );
 
-    emulator.load_rom(_dr_mario)?;
+    emulator.load_rom(_tetris)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
     emulator_window.set_background(WHITE);
     while emulator_window.is_open() {
-        let frame = match emulator.update() {
+        let frame_buffer = match emulator.update() {
             Ok(frame) => frame,
             Err(e) => {
                 println!("{}", e);
@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         emulator.update_debug_view();
         emulator_window.clear();
-        emulator_window.set_buffer(frame);
+        emulator_window.set_buffer(frame_buffer);
         emulator_window.render()?;
     }
 
