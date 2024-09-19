@@ -1,10 +1,10 @@
 /*
 * TODO
+* Add Memory bank switching(change how mem is stored)
 * Add object drawing
 * Clean up code
 * Optimize so emulator runs faster
 * Add interrupts
-* Add Memory bank switching
 * Implement timer
 */
 
