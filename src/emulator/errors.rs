@@ -19,6 +19,7 @@ impl std::error::Error for MemError {}
 pub enum CpuError {
     OpcodeNotImplemented(u8, bool),
     UnrecognizedOpcode(u8, bool),
+    IntentionalCrash,
     OpcodeError(String),
 }
 
@@ -56,6 +57,7 @@ impl fmt::Display for CpuError {
                 }
             }
             CpuError::OpcodeError(msg) => write!(f, "CPU_ERROR: {}", msg),
+            CpuError::IntentionalCrash => write!(f, "CPU_ERROR: Intentional Crash"),
         }
     }
 }

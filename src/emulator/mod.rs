@@ -90,9 +90,7 @@ impl<'a> Emulator<'a> {
 
     pub fn load_rom(&mut self, rom: Rom) -> Result<(), Box<dyn Error>> {
         if rom.gb_compatible() {
-            self.memory
-                .borrow_mut()
-                .load_rom(false, Some(rom.bytes()))?;
+            self.memory.borrow_mut().load_rom(false, Some(rom))?;
             Ok(())
         } else {
             Err(Box::new(EmulatorError::IncompatibleRom))

@@ -5,6 +5,7 @@
 * Clean up code
 * Optimize so emulator runs faster
 * Add interrupts
+* Add RAM bank switching
 * Implement timer
 */
 
@@ -27,7 +28,6 @@ const SCREEN_HEIGHT: usize = 144;
 
 const GREEN_PALETTE: Palette = (0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
 const GRAY_PALETTE: Palette = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
-
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Init windows
@@ -54,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _instr_timing = Rom::from("./roms/tests/instr_timing/instr_timing.gb")?;
     let _tetris = Rom::from("./roms/games/tetris.gb")?;
     let _dr_mario = Rom::from("./roms/games/Dr. Mario (World).gb")?;
-    // let _bubble_bobble = Rom::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
+    let _bubble_bobble = Rom::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
 
     let mut emulator = Emulator::new(
         GRAY_PALETTE,
@@ -66,10 +66,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         ],
         Some(&mut tile_window),
         None,
-        Some(&mut background_map_window), 
+        Some(&mut background_map_window),
     );
 
-    emulator.load_rom(_tetris)?;
+    emulator.load_rom(_cpu_instrs_test_rom)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));

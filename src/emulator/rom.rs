@@ -1,7 +1,7 @@
 use std::{fs, io::Error};
 
-#[derive(Debug)]
-enum MBC {
+#[derive(Debug, Clone)]
+pub(super) enum MBC {
     MBC1,
     MBC2,
     MBC3,
@@ -94,5 +94,9 @@ impl Rom {
 
     pub fn gb_compatible(&self) -> bool {
         self.gb_compatible
+    }
+
+    pub fn mbc(&self) -> Option<MBC> {
+        self.mbc.clone()
     }
 }

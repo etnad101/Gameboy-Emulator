@@ -1,11 +1,14 @@
 use std::{error::Error, fs, ops::Range};
 
-use super::errors::{EmulatorError, MemError};
+use super::{
+    errors::{EmulatorError, MemError},
+    rom::{Rom, MBC},
+};
 
 pub struct MemoryBus {
     size: usize,
     bytes: Vec<u8>,
-    cutoff_rom: Vec<u8>,
+    rom: Option<Rom>,
 }
 
 impl MemoryBus {
@@ -15,40 +18,52 @@ impl MemoryBus {
         MemoryBus {
             size,
             bytes: memory,
-            cutoff_rom: Vec::new(),
+            rom: None,
         }
     }
 
-    pub fn load_rom(
-        &mut self,
-        boot_rom: bool,
-        p_rom: Option<Vec<u8>>,
-    ) -> Result<(), Box<dyn Error>> {
-        let rom: Vec<u8> = if boot_rom {
-            let path = "./DMG_ROM.bin";
-            fs::read(path)?
-        } else {
-            match p_rom {
-                Some(rom) => rom,
-                None => return Err(Box::new(EmulatorError::NoProgramRom)),
-            }
+    pub fn load_rom(&mut self, boot_rom: bool, p_rom: Option<Rom>) -> Result<(), Box<dyn Error>> {
+        if boot_rom {
+            let boot_rom = fs::read("./DMG_ROM.bin")?;
+
+            self.bytes[0x0000..0x0100].copy_from_slice(&boot_rom[0x0000..0x0100]);
+            return Ok(());
+        } 
+
+        self.rom = match p_rom {
+            Some(rom) => Some(rom),
+            None => return Err(Box::new(EmulatorError::NoProgramRom)),
         };
 
-        let rom_size = rom.len();
+        let rom = self.rom.as_ref().unwrap();
 
-        let mut start_addr = 0;
-
-        if !boot_rom {
-            start_addr = 0x100;
-            self.cutoff_rom = rom[0..0x100].to_owned();
+        match rom.mbc() {
+            None => self.bytes[0x0100..0x8000].copy_from_slice(&rom.bytes()[0x0100..0x8000]),
+            Some(MBC::MBC1) => {
+                self.bytes[0x0100..0x8000].copy_from_slice(&rom.bytes()[0x0100..0x8000])
+            }
+            _ => (),
         }
-        self.bytes[start_addr..rom_size].copy_from_slice(&rom[start_addr..rom_size]);
 
         Ok(())
     }
 
     fn unmap_boot_rom(&mut self) {
-        self.bytes[0..0x100].copy_from_slice(&self.cutoff_rom[0..0x100]);
+        let replacement = self.rom.as_ref().unwrap().bytes();
+        self.bytes[0..0x100].copy_from_slice(&replacement[0..0x100]);
+    }
+
+    fn set_rom_bank(&mut self, bank_number: u8) {
+        let bank_number = if bank_number == 0 {
+            1 
+        } else {
+            bank_number & 0x1F
+        };
+
+        println!("switching to bank: {}", bank_number);
+        let bytes = self.rom.as_ref().unwrap().bytes(); 
+        let bank_addr: usize = bank_number as usize * 0x4000;
+        self.bytes[0x4000..0x8000].copy_from_slice(&bytes[bank_addr..bank_addr + 0x4000]);
     }
 
     pub fn clear(&mut self) {
@@ -75,12 +90,18 @@ impl MemoryBus {
     pub fn write_u8(&mut self, addr: u16, value: u8) {
         // TODO: implement Echo RAM and range checks
         let mut value = value;
-        if addr == 0xff50 && self.cutoff_rom.len() > 0 {
-            self.unmap_boot_rom()
+        match addr {
+            0x2000..=0x3FFF => {
+                self.set_rom_bank(value);
+                return;
+            }
+            0xff04 => value = 0,
+            0xff50 => {
+                self.unmap_boot_rom()
+            }
+            _ => (),
         }
-        if addr == 0xFF04 {
-            value = 0;
-        }
+
         self.bytes[addr as usize] = value;
     }
 
