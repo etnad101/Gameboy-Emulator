@@ -63,6 +63,7 @@ impl<'a> Emulator<'a> {
         tile_window: Option<&'a mut Display>,
         register_window: Option<&'a mut Display>,
         background_map_window: Option<&'a mut Display>,
+        memory_view_window: Option<&'a mut Display>,
     ) -> Self {
         let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
         memory_bus.borrow_mut().load_rom(true, None).unwrap();
@@ -73,6 +74,7 @@ impl<'a> Emulator<'a> {
             tile_window,
             register_window,
             background_map_window,
+            memory_view_window,
             palette,
         )));
 
@@ -140,7 +142,8 @@ impl<'a> Emulator<'a> {
         self.debugger
             .borrow_mut()
             .render_register_window(self.cpu.get_registers());
-        self.debugger.borrow_mut().render_background_map()
+        self.debugger.borrow_mut().render_background_map();
+        self.debugger.borrow_mut().render_memory_viewer();
     }
 
     fn _load_state(&mut self, test: &TestData) {

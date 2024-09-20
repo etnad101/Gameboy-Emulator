@@ -60,7 +60,6 @@ impl MemoryBus {
             bank_number & 0x1F
         };
 
-        println!("switching to bank: {}", bank_number);
         let bytes = self.rom.as_ref().unwrap().bytes(); 
         let bank_addr: usize = bank_number as usize * 0x4000;
         self.bytes[0x4000..0x8000].copy_from_slice(&bytes[bank_addr..bank_addr + 0x4000]);

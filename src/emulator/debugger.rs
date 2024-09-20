@@ -1,5 +1,5 @@
 use core::panic;
-use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
+use std::{borrow::BorrowMut, cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
 
 use chrono::{DateTime, Local};
 
@@ -56,6 +56,7 @@ impl Tile {
 pub enum DebugFlags {
     ShowTileMap,
     ShowRegisters,
+    ShowMemView,
     DumpMem,
     DumpCallLog,
 }
@@ -66,6 +67,7 @@ pub struct Debugger<'a> {
     tile_window: Option<&'a mut Display>,
     register_window: Option<&'a mut Display>,
     background_map_window: Option<&'a mut Display>,
+    memory_view_window: Option<&'a mut Display>,
     memory: Rc<RefCell<MemoryBus>>,
     palette: Palette,
     call_log: VecDeque<String>,
@@ -78,6 +80,7 @@ impl<'a> Debugger<'a> {
         tile_window: Option<&'a mut Display>,
         register_window: Option<&'a mut Display>,
         background_map_window: Option<&'a mut Display>,
+        memory_view_window: Option<&'a mut Display>,
         palette: Palette,
     ) -> Self {
         let active = !flags.is_empty();
@@ -87,6 +90,7 @@ impl<'a> Debugger<'a> {
             tile_window,
             register_window,
             background_map_window,
+            memory_view_window,
             memory,
             palette,
             call_log: VecDeque::new(),
@@ -376,6 +380,29 @@ impl<'a> Debugger<'a> {
                 window.render().unwrap();
             }
             None => panic!("no window provided for background map"),
+        }
+    }
+
+    pub fn render_memory_viewer(&mut self) {
+        if (!self.active) || (!self.flags.contains(&DebugFlags::ShowMemView)) {
+            return;
+        }
+        match self.memory_view_window {
+            Some(ref mut window) => {
+                window.set_background(WHITE);
+                window.clear();
+
+                let mut buff: Vec<Color> = Vec::new();
+                for addr in 0..=0xFFFF {
+                    let byte = self.memory.borrow().read_u8(addr);
+                    let color: Color =  ((byte as u32) << 16) | ((byte as u32) << 8) | byte as u32;
+                    buff.push(color);
+                }
+
+                window.set_buffer(buff);
+                window.render().unwrap();
+            }
+            None => panic!("No window provided for memory view"),
         }
     }
 }

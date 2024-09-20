@@ -13,7 +13,7 @@ mod drivers;
 mod emulator;
 mod utils;
 
-use std::error::Error;
+use std::{error::Error, mem};
 
 use emulator::{debugger::DebugFlags, rom::Rom, Emulator};
 use simple_graphics::{
@@ -34,9 +34,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let mut register_window = Display::new("Register View", 300, 300, true)?;
     // let font = Font::new("./fonts/retro-pixel-cute-mono.bdf").unwrap();
     // register_window.set_font(font);
-    let mut background_map_window = Display::new("BackgroundMap", 32 * 8, 32 * 8, true)?;
-    let mut tile_window = Display::new("Tile Map", 128, 192, true)?;
     let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
+    let mut background_map_window = Display::new("BackgroundMap", 32 * 8, 32 * 8, false)?;
+    let mut tile_window = Display::new("Tile Map", 128, 192, false)?;
+    let mut memory_window = Display::new("Memory Viewer", 256, 256, false)?;
 
     let _dmg_acid2_rom = Rom::from("./roms/tests/dmg-acid2.gb")?; // fail
     let _cpu_instrs_test_rom = Rom::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?; // fail
@@ -54,7 +55,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _instr_timing = Rom::from("./roms/tests/instr_timing/instr_timing.gb")?;
     let _tetris = Rom::from("./roms/games/tetris.gb")?;
     let _dr_mario = Rom::from("./roms/games/Dr. Mario (World).gb")?;
-    let _bubble_bobble = Rom::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
+    // let _bubble_bobble = Rom::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
 
     let mut emulator = Emulator::new(
         GRAY_PALETTE,
@@ -62,11 +63,13 @@ fn main() -> Result<(), Box<dyn Error>> {
             DebugFlags::DumpMem,
             DebugFlags::DumpCallLog,
             DebugFlags::ShowTileMap,
+            DebugFlags::ShowMemView,
             // DebugFlags::ShowRegisters,
         ],
         Some(&mut tile_window),
         None,
         Some(&mut background_map_window),
+        Some(&mut memory_window),
     );
 
     emulator.load_rom(_cpu_instrs_test_rom)?;
@@ -97,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new(GRAY_PALETTE, vec![], None, None, None);
+        let mut emulator = Emulator::new(GRAY_PALETTE, vec![], None, None, None, None);
         assert!(emulator._run_opcode_tests().unwrap());
     }
 }
