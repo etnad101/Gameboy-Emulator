@@ -3,7 +3,7 @@ pub mod debugger;
 mod errors;
 mod memory;
 mod ppu;
-pub mod rom;
+pub mod cartridge;
 mod test;
 
 use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
@@ -13,7 +13,7 @@ use debugger::{DebugFlags, Debugger};
 use errors::{CpuError, EmulatorError};
 use memory::MemoryBus;
 use ppu::Ppu;
-use rom::Rom;
+use cartridge::Cartridge;
 use test::TestData;
 
 use crate::Palette;
@@ -90,7 +90,7 @@ impl<'a> Emulator<'a> {
         }
     }
 
-    pub fn load_rom(&mut self, rom: Rom) -> Result<(), Box<dyn Error>> {
+    pub fn load_rom(&mut self, rom: Cartridge) -> Result<(), Box<dyn Error>> {
         if rom.gb_compatible() {
             self.memory.borrow_mut().load_rom(false, Some(rom))?;
             Ok(())

@@ -14,7 +14,7 @@ pub(super) enum MBC {
     HuC3,
 }
 
-pub struct Rom {
+pub struct Cartridge {
     bytes: Vec<u8>,
     title: String,
     gb_compatible: bool,
@@ -24,8 +24,8 @@ pub struct Rom {
     timer: bool,
 }
 
-impl Rom {
-    pub fn from(rom_path: &str) -> Result<Rom, Error> {
+impl Cartridge {
+    pub fn from(rom_path: &str) -> Result<Cartridge, Error> {
         println!("Looking for rom at '{}'", rom_path);
         let bytes = fs::read(rom_path)?;
         let cgb_flag = bytes[0x143];
@@ -77,7 +77,7 @@ impl Rom {
             _ => panic!("Cartrige type not implemented yet"),
         };
 
-        Ok(Rom {
+        Ok(Cartridge {
             bytes,
             title,
             gb_compatible,

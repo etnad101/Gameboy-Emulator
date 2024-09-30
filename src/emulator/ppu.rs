@@ -74,7 +74,6 @@ pub struct Ppu<'a> {
     hi_byte: u8,
     background_fifo: Fifo,
     object_fifo: Fifo,
-    scanline_has_reset: bool,
     palette: Palette,
 }
 
@@ -100,7 +99,6 @@ impl<'a> Ppu<'a> {
             hi_byte: 0,
             background_fifo: Fifo::new(),
             object_fifo: Fifo::new(),
-            scanline_has_reset: false,
             palette,
         }
     }
@@ -161,8 +159,9 @@ impl<'a> Ppu<'a> {
 
     fn push_to_fifo(&mut self) {
         for bit in (0..8).rev() {
-            let lo = ((self.lo_byte & (1 << bit)) >> bit) as u16;
-            let hi = ((self.hi_byte & (1 << bit)) >> bit) as u16;
+            let mask = 1 << bit;
+            let lo = ((self.lo_byte & mask) >> bit) as u16;
+            let hi = ((self.hi_byte & mask) >> bit) as u16;
             let data: u8 = ((hi << 1) | lo) as u8;
             let color: Color = match data {
                 0 => self.palette.0,
@@ -206,12 +205,7 @@ impl<'a> Ppu<'a> {
                             }
                             FetcherMode::TileDataHigh => {
                                 self.hi_byte = self.get_tile_data_high();
-                                if !self.scanline_has_reset {
-                                    self.fetcher_mode = FetcherMode::GetTile;
-                                    self.scanline_has_reset = true;
-                                } else {
-                                    self.fetcher_mode = FetcherMode::Push
-                                }
+                                self.fetcher_mode = FetcherMode::Push
                             }
                             FetcherMode::Push => {
                                 self.push_to_fifo();
@@ -221,7 +215,7 @@ impl<'a> Ppu<'a> {
                         }
                     }
 
-                    if self.background_fifo.len() > 8 {
+                    if self.background_fifo.len() > 0 {
                         let color = self.background_fifo.pop();
                         let ly = self.read_mem_u8(LCDRegister::LY as u16);
                         self.set_pixel(self.scanline_x as usize, ly as usize, color);
@@ -233,9 +227,8 @@ impl<'a> Ppu<'a> {
                     }
                 }
                 PpuMode::HBlank => {
-                    if self.current_scanline_cycles >= 456 {
+                    if self.current_scanline_cycles >= CYCLES_PER_SCANLINE {
                         let scx = self.read_mem_u8(LCDRegister::SCX as u16);
-                        self.scanline_has_reset = false;
                         self.scanline_x = 0;
                         self.fetcher_x = scx >> 3;
                         self.current_scanline_cycles = 0;
@@ -250,7 +243,7 @@ impl<'a> Ppu<'a> {
                     }
                 }
                 PpuMode::VBlank => {
-                    if self.current_scanline_cycles >= 456 {
+                    if self.current_scanline_cycles >= CYCLES_PER_SCANLINE {
                         self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
                         ly = ly.wrapping_add(1);
