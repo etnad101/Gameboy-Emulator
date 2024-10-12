@@ -240,8 +240,8 @@ impl<'a> Debugger<'a> {
                 }
 
                 window.clear();
-                let block_size: usize = 16 * 128 * 3;
-                let vram_start: usize = 0x8000;
+                let block_size: u16 = 16 * 128 * 3;
+                let vram_start: u16 = 0x8000;
                 let tile_data = self
                     .memory
                     .borrow()
@@ -343,7 +343,7 @@ impl<'a> Debugger<'a> {
                     let tile_data = self
                         .memory
                         .borrow()
-                        .get_range(tile_data_addr..tile_data_addr + 16)
+                        .get_range(tile_data_addr as u16..tile_data_addr as u16+ 16)
                         .unwrap();
                     let mut pixel_x = tile_x * 8;
                     let mut pixel_y = tile_y * 8;

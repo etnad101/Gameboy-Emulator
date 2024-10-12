@@ -76,6 +76,7 @@ impl Cartridge {
             0xff => (Some(MBC::HuC1), true, true, false),
             _ => panic!("Cartrige type not implemented yet"),
         };
+        dbg!(&mbc);
 
         Ok(Cartridge {
             bytes,

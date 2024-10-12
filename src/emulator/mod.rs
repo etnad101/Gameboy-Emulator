@@ -19,7 +19,7 @@ use test::TestData;
 use crate::Palette;
 use simple_graphics::display::{Color, Display};
 
-const MEM_SIZE: usize = 0xFFFF;
+const MEM_SIZE: u16 = 0xFFFF;
 const CPU_FREQ: usize = 4_194_304; // T-cycles
 const DIV_FREQ: usize = 16_384;
 const MAX_CYCLES_PER_FRAME: usize = 70_224; // CPU_FREQ / FRAME_RATE
