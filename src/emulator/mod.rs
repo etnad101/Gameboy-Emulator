@@ -66,7 +66,6 @@ impl<'a> Emulator<'a> {
         memory_view_window: Option<&'a mut Display>,
     ) -> Self {
         let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
-        memory_bus.borrow_mut().load_rom(true, None).unwrap();
 
         let debugger = Rc::new(RefCell::new(Debugger::new(
             debug_flags,
@@ -91,8 +90,9 @@ impl<'a> Emulator<'a> {
     }
 
     pub fn load_rom(&mut self, rom: Cartridge) -> Result<(), Box<dyn Error>> {
+        println!("Loading rom: {}", rom.title());
         if rom.gb_compatible() {
-            self.memory.borrow_mut().load_rom(false, Some(rom))?;
+            self.memory.borrow_mut().load_rom(rom);
             Ok(())
         } else {
             Err(Box::new(EmulatorError::IncompatibleRom))
@@ -148,7 +148,7 @@ impl<'a> Emulator<'a> {
 
     fn _load_state(&mut self, test: &TestData) {
         self.cpu._load_state(&test.initial);
-        self.memory.borrow_mut().clear();
+        self.memory.borrow_mut()._clear();
         for mem_state in test.initial.ram.iter().cloned() {
             let addr = mem_state[0];
             let value = mem_state[1] as u8;

@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         None,
     );
 
-    emulator.load_rom(_cpu_instrs_test_rom)?;
+    emulator.load_rom(_tetris)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));

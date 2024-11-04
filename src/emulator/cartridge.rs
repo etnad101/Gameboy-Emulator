@@ -19,6 +19,7 @@ pub struct Cartridge {
     title: String,
     gb_compatible: bool,
     mbc: Option<MBC>,
+    rom_banks: usize,
     ram: bool,
     battery: bool,
     timer: bool,
@@ -74,19 +75,34 @@ impl Cartridge {
             0x20 => (Some(MBC::MBC6), false, false, false),
             0xfe => (Some(MBC::HuC3), false, false, false),
             0xff => (Some(MBC::HuC1), true, true, false),
-            _ => panic!("Cartrige type not implemented yet"),
+            _ => panic!("Cartridge type not implemented yet"),
         };
-        dbg!(&mbc);
+
+        let rom_banks = match bytes[0x148] {
+            0x00..=0x08 => {
+                let base: usize = 2;
+                base.pow(bytes[0x148] as u32)
+            },
+            0x52 => 72,
+            0x53 => 80,
+            0x54 => 96,
+            _ => panic!("No other rom sizes"),
+        };
 
         Ok(Cartridge {
             bytes,
             title,
             gb_compatible,
             mbc,
+            rom_banks,
             ram,
             battery,
             timer,
         })
+    }
+
+    pub fn title(&self) -> String {
+        self.title.clone()
     }
 
     pub fn bytes(&self) -> Vec<u8> {
@@ -97,7 +113,11 @@ impl Cartridge {
         self.gb_compatible
     }
 
-    pub fn mbc(&self) -> Option<MBC> {
+    pub fn rom_banks(&self) -> usize {
+        self.rom_banks
+    }
+
+    pub(super) fn mbc(&self) -> Option<MBC> {
         self.mbc.clone()
     }
 }

@@ -7,6 +7,7 @@ use super::{
 
 pub struct MemoryBus {
     size: u16,
+    boot_rom: Vec<u8>,
     rom: Vec<u8>,
     switchable_rom: Vec<u8>,
     vram: Vec<u8>,
@@ -21,13 +22,17 @@ pub struct MemoryBus {
     ram_banks: Vec<Vec<u8>>,
     cartridge: Option<Cartridge>,
 
+    boot_rom_active: bool,
     current_bank: usize,
 }
 
 impl MemoryBus {
     pub fn new(size: u16) -> Self {
+        let boot_rom = fs::read("./DMG_ROM.bin").unwrap();
+        println!("boot rom size {}", boot_rom.len());
         MemoryBus {
             size,
+            boot_rom,
             rom: vec![0xFF; 0x4000],
             switchable_rom: vec![0xFF; 0x4000],
             vram: vec![0xFF; 0x2000],
@@ -35,56 +40,42 @@ impl MemoryBus {
             work_ram: vec![0xFF; 0x2000],
             echo_ram: vec![0xFF; 0x1E00],
             oam: vec![0xFF; 0x00A0],
-            io_registers: vec![0xFF; 0x0060],
+            io_registers: vec![0xFF; 0x0080],
             hram: vec![0xFF; 0x0080],
 
             ram_banks: Vec::new(),
             rom_banks: Vec::new(),
             cartridge: None,
 
+            boot_rom_active: true,
             current_bank: 1,
         }
     }
 
     pub fn load_rom(
         &mut self,
-        boot_rom: bool,
-        p_rom: Option<Cartridge>,
-    ) -> Result<(), Box<dyn Error>> {
-        if boot_rom {
-            let boot_rom = fs::read("./DMG_ROM.bin")?;
-
-            self.rom[0x0000..0x0100].copy_from_slice(&boot_rom[0x0000..0x0100]);
-            return Ok(());
-        }
-
-        self.cartridge = match p_rom {
-            Some(cart) => Some(cart),
-            None => return Err(Box::new(EmulatorError::NoProgramRom)),
-        };
-
-        let cart = self.cartridge.as_ref().unwrap();
-
-        match cart.mbc() {
-            None => self.set_range(0x0100..0x8000, &cart.bytes()[0x0100..0x8000]),
+        p_rom: Cartridge,
+    ) {
+        dbg!(p_rom.title(), p_rom.mbc(), p_rom.rom_banks());
+        match p_rom.mbc() {
+            None => self.set_range(0x0000..0x8000, &p_rom.bytes()[0x0000..0x8000]),
             Some(MBC::MBC1) => {
-                // TODO: figure out how many banks there are
-                for i in 0..4 {
+                for i in 0..p_rom.rom_banks() {
                     println!("creating bank");
                     let start = 0x4000 * i;
                     let end = start + 0x4000;
-                    let mem_block = &cart.bytes()[start..end];
+                    let mem_block = &p_rom.bytes()[start..end];
                     self.rom_banks.push(mem_block.to_vec());
                 }
-                self.set_range(0x0100..0x8000, &cart.bytes()[0x0100..0x8000]);
+                self.set_range(0x0000..0x8000, &p_rom.bytes()[0x0000..0x8000]);
             }
             _ => (),
         }
 
-        Ok(())
+        self.cartridge =  Some(p_rom);
     }
 
-    pub fn clear(&mut self) {
+    pub fn _clear(&mut self) {
         self.rom = vec![0xFF; 0x4000];
         self.switchable_rom = vec![0xFF; 0x4000];
         self.vram = vec![0xFF; 0x2000];
@@ -92,19 +83,17 @@ impl MemoryBus {
         self.work_ram = vec![0xFF; 0x2000];
         self.echo_ram = vec![0xFF; 0x1E00];
         self.oam = vec![0xFF; 0x00A0];
-        self.io_registers = vec![0xFF; 0x0060];
+        self.io_registers = vec![0xFF; 0x0080];
         self.hram = vec![0xFF; 0x0080];
 
         self.ram_banks = Vec::new();
         self.rom_banks = Vec::new();
     }
 
-    fn unmap_boot_rom(&mut self) {
-        let replacement = self.cartridge.as_ref().unwrap().bytes();
-        self.set_range(0x0000..0x0100, &replacement[0..0x100]);
-    }
-
     fn set_rom_bank(&mut self, bank_number: u8) {
+        if self.cartridge.as_ref().unwrap().mbc().is_none() {
+            return;
+        }
         let bank_number = if bank_number == 0 {
             1
         } else {
@@ -120,6 +109,12 @@ impl MemoryBus {
     }
 
     pub fn read_u8(&self, addr: u16) -> u8 {
+        if self.boot_rom_active {
+            match addr {
+                0x0000..=0x00FF => return self.boot_rom[addr as usize],
+                _ => (),
+            }
+        };
         match addr {
             0x0000..=0x3FFF => self.rom[addr as usize],
             0x4000..=0x7FFF => self.switchable_rom[addr as usize - 0x4000],
@@ -140,31 +135,17 @@ impl MemoryBus {
         (hi << 8) | lo
     }
 
-    fn mem_write(&mut self, addr: u16, value: u8) {
-        match addr {
-            0x0000..=0x3FFF => self.rom[addr as usize] = value,
-            0x4000..=0x7FFF => self.switchable_rom[addr as usize - 0x4000] = value,
-            0x8000..=0x9FFF => self.vram[addr as usize - 0x8000] = value,
-            0xA000..=0xBFFF => self.ram[addr as usize - 0xA000] = value,
-            0xC000..=0xDFFF => self.work_ram[addr as usize - 0xC000] = value,
-            0xE000..=0xFDFF => self.echo_ram[addr as usize - 0xE000] = value,
-            0xFE00..=0xFE9F => self.oam[addr as usize - 0xFE00] = value,
-            0xFEA0..=0xFEFF => (), // not useable range, refer to pandocs
-            0xFF00..=0xFF7F => self.io_registers[addr as usize - 0xFF00] = value,
-            0xFF80..=0xFFFF => self.hram[addr as usize - 0xFF80] = value,
-        }
-    }
-
     pub fn write_u8(&mut self, addr: u16, value: u8) {
         // TODO: implement Echo RAM and range checks
         let mut value = value;
         match addr {
             0x2000..=0x3FFF => {
+                println!("Changing rom bank by writing to addr: {:#06x}", addr);
                 self.set_rom_bank(value);
                 return;
             }
             0xff04 => value = 0,
-            0xff50 => self.unmap_boot_rom(),
+            0xff50 => self.boot_rom_active = false,
             _ => (),
         }
 
@@ -174,17 +155,31 @@ impl MemoryBus {
             0xC000..=0xDFFF => self.work_ram[addr as usize - 0xC000] = value,
             0xE000..=0xFDFF => self.echo_ram[addr as usize - 0xE000] = value,
             0xFE00..=0xFE9F => self.oam[addr as usize - 0xFE00] = value,
+            0xFEA0..=0xFEFF => (), // not useable range, refer to pandocs
             0xFF00..=0xFF7F => self.io_registers[addr as usize - 0xFF00] = value,
             0xFF80..=0xFFFF => self.hram[addr as usize - 0xFF80] = value,
-            _ => panic!("Tried writing to illegal address {}", addr),
+            _ => panic!("Tried writing to illegal address {:#06x}", addr),
         }
     }
 
     pub fn set_range(&mut self, range: Range<u16>, data: &[u8]) {
         assert!((range.len()) as usize == data.len(), "error");
-        for i in range.clone().into_iter() {
-            let index = (i - range.start) as usize;
-            self.mem_write(i, data[index]);
+        for addr in range.clone().into_iter() {
+            let index = (addr - range.start) as usize;
+            let value = data[index];
+
+            match addr {
+                0x0000..=0x3FFF => self.rom[addr as usize] = value,
+                0x4000..=0x7FFF => self.switchable_rom[addr as usize - 0x4000] = value,
+                0x8000..=0x9FFF => self.vram[addr as usize - 0x8000] = value,
+                0xA000..=0xBFFF => self.ram[addr as usize - 0xA000] = value,
+                0xC000..=0xDFFF => self.work_ram[addr as usize - 0xC000] = value,
+                0xE000..=0xFDFF => self.echo_ram[addr as usize - 0xE000] = value,
+                0xFE00..=0xFE9F => self.oam[addr as usize - 0xFE00] = value,
+                0xFEA0..=0xFEFF => (), // not useable range, refer to pandocs
+                0xFF00..=0xFF7F => self.io_registers[addr as usize - 0xFF00] = value,
+                0xFF80..=0xFFFF => self.hram[addr as usize - 0xFF80] = value,
+            }
         }
     }
 
