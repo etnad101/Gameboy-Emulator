@@ -5,6 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# Remove this for final release build
+[profile.release]
+debug = true
+
 [dependencies]
 simple_graphics = { git = "https://github.com/etnad101/simple-graphics-rs"}
 chrono = "0.4.38"

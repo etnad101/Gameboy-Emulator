@@ -13,13 +13,10 @@ mod drivers;
 mod emulator;
 mod utils;
 
-use std::{error::Error, mem};
+use std::error::Error;
 
-use emulator::{cartridge::Cartridge, debugger::DebugFlags, Emulator};
-use simple_graphics::{
-    display::{Color, Display, WHITE},
-    fonts::Font,
-};
+use emulator::{cartridge::Cartridge, Emulator};
+use simple_graphics::display::{Color, Display, WHITE};
 
 type Palette = (Color, Color, Color, Color);
 
@@ -55,7 +52,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let _instr_timing = Cartridge::from("./roms/tests/instr_timing/instr_timing.gb")?;
     let _tetris = Cartridge::from("./roms/games/tetris.gb")?;
     let _dr_mario = Cartridge::from("./roms/games/Dr. Mario (World).gb")?;
-    //let _bubble_bobble = Rom::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
+    let _pokemon = Cartridge::from("./roms/games/Pokemon Red.gb")?;
+    // let _bubble_bobble = Cartridge::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
 
     let mut emulator = Emulator::new(
         GRAY_PALETTE,
@@ -72,7 +70,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         None,
     );
 
-    emulator.load_rom(_tetris)?;
+    emulator.load_rom(_dmg_acid2_rom)?;
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));

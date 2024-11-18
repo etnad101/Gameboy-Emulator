@@ -134,7 +134,7 @@ impl<'a> Ppu<'a> {
         let tile_num_addr = 0x9800
             | (tile_map_base << 10)
             | ((((ly + scy) & 0xFF) >> 3) << 5)
-            | (((self.scanline_x as u16 + scx) & 0xFF) >> 3);
+            | (((self.scanline_x as u16 + (scx & 7)) & 0xFF) >> 3); // TODO: THIS MIGHT FIX THE X OFFSET
 
         self.read_mem_u8(tile_num_addr)
     }
@@ -154,7 +154,7 @@ impl<'a> Ppu<'a> {
     }
 
     fn get_tile_data_high(&mut self) -> u8 {
-        self.read_mem_u8(self.tile_addr | 1)
+        self.read_mem_u8(self.tile_addr + 1)
     }
 
     fn push_to_fifo(&mut self) {
@@ -230,7 +230,7 @@ impl<'a> Ppu<'a> {
                     if self.current_scanline_cycles >= CYCLES_PER_SCANLINE {
                         let scx = self.read_mem_u8(LCDRegister::SCX as u16);
                         self.scanline_x = 0;
-                        self.fetcher_x = scx >> 3;
+                        self.fetcher_x = (scx & 7) >> 3;
                         self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::LY as u16);
                         ly = ly.wrapping_add(1);

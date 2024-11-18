@@ -68,8 +68,9 @@ impl MemoryBus {
                     self.rom_banks.push(mem_block.to_vec());
                 }
                 self.set_range(0x0000..0x8000, &p_rom.bytes()[0x0000..0x8000]);
+                println!("rom_banks created: {}", self.rom_banks.len());
             }
-            _ => (),
+            _ => println!("MBC Not supported yet"),
         }
 
         self.cartridge =  Some(p_rom);
