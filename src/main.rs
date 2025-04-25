@@ -37,23 +37,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let mut memory_window = Display::new("Memory Viewer", 256, 256, false)?;
 
     let _dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
-    let _cpu_instrs_test_rom = Cartridge::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?; // fail
-    let _cpu_01 = Cartridge::from("./roms/tests/cpu_instrs/individual/01-special.gb")?; // pass
-    let _cpu_02 = Cartridge::from("./roms/tests/cpu_instrs/individual/02-interrupts.gb")?; // fail
-    let _cpu_03 = Cartridge::from("./roms/tests/cpu_instrs/individual/03-op sp,hl.gb")?; // pass
-    let _cpu_04 = Cartridge::from("./roms/tests/cpu_instrs/individual/04-op r,imm.gb")?; // pass
-    let _cpu_05 = Cartridge::from("./roms/tests/cpu_instrs/individual/05-op rp.gb")?; // pass
-    let _cpu_06 = Cartridge::from("./roms/tests/cpu_instrs/individual/06-ld r,r.gb")?; // pass
-    let _cpu_07 = Cartridge::from("./roms/tests/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb")?; // pass
-    let _cpu_08 = Cartridge::from("./roms/tests/cpu_instrs/individual/08-misc instrs.gb")?; // pass
-    let _cpu_09 = Cartridge::from("./roms/tests/cpu_instrs/individual/09-op r,r.gb")?; // pass
-    let _cpu_10 = Cartridge::from("./roms/tests/cpu_instrs/individual/10-bit ops.gb")?; // pass
-    let _cpu_11 = Cartridge::from("./roms/tests/cpu_instrs/individual/11-op a,(hl).gb")?; // pass
-    let _instr_timing = Cartridge::from("./roms/tests/instr_timing/instr_timing.gb")?;
-    let _tetris = Cartridge::from("./roms/games/tetris.gb")?;
-    let _dr_mario = Cartridge::from("./roms/games/Dr. Mario (World).gb")?;
-    let _pokemon = Cartridge::from("./roms/games/Pokemon Red.gb")?;
-    // let _bubble_bobble = Cartridge::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
 
     let mut emulator = Emulator::new(
         GRAY_PALETTE,

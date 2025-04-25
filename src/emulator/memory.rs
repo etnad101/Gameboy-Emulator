@@ -111,9 +111,8 @@ impl MemoryBus {
 
     pub fn read_u8(&self, addr: u16) -> u8 {
         if self.boot_rom_active {
-            match addr {
-                0x0000..=0x00FF => return self.boot_rom[addr as usize],
-                _ => (),
+            if let 0x0000..=0x00FF = addr {
+                return self.boot_rom[addr as usize]
             }
         };
         match addr {
@@ -164,8 +163,8 @@ impl MemoryBus {
     }
 
     pub fn set_range(&mut self, range: Range<u16>, data: &[u8]) {
-        assert!((range.len()) as usize == data.len(), "error");
-        for addr in range.clone().into_iter() {
+        assert!((range.len()) == data.len(), "error");
+        for addr in range.clone() {
             let index = (addr - range.start) as usize;
             let value = data[index];
 

@@ -523,9 +523,9 @@ impl<'a> Cpu<'a> {
 
         if jump {
             self.pc = self.pop_stack();
-            return 12;
+            12
         } else {
-            return 0;
+            0
         }
     }
 

@@ -130,7 +130,7 @@ impl<'a> Debugger<'a> {
         let mut log = String::from("CALL LOG\n------------------------------------\n");
         for instruction in &self.call_log {
             log.push_str(instruction);
-            log.push_str("\n");
+            log.push('\n');
         }
 
         Some(log)
@@ -185,7 +185,7 @@ impl<'a> Debugger<'a> {
                 mem_log.push(' ');
             }
 
-            let byte: u8 = self.memory.borrow().read_u8(i as u16);
+            let byte: u8 = self.memory.borrow().read_u8(i);
             mem_log.push_str(&format!("{:02x} ", byte));
         }
         Some(mem_log)
@@ -193,13 +193,11 @@ impl<'a> Debugger<'a> {
 
     pub fn dump_logs(&mut self) {
         let mut log = String::new();
-        match self.create_call_log_dump() {
-            Some(l) => log.push_str(&l),
-            None => (),
+        if let Some(l) = self.create_call_log_dump() {
+            log.push_str(&l)
         }
-        match self.create_mem_dump() {
-            Some(l) => log.push_str(&l),
-            None => (),
+        if let Some(l) = self.create_mem_dump() {
+            log.push_str(&l)
         }
 
         if log == String::new() {
