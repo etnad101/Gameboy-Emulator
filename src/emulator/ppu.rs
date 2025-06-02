@@ -6,7 +6,7 @@ use super::memory::MemoryBus;
 use super::{Debugger, LCDRegister};
 use crate::Palette;
 use crate::{utils::BitOps, SCREEN_HEIGHT, SCREEN_WIDTH};
-use simple_graphics::display::{Color, BLACK, WHITE};
+use simple_graphics::display::{Color, WHITE};
 
 const CYCLES_PER_SCANLINE: usize = 456;
 

@@ -82,7 +82,7 @@ impl Cartridge {
             0x00..=0x08 => {
                 let base: usize = 2;
                 base.pow(bytes[0x148] as u32)
-            },
+            }
             0x52 => 72,
             0x53 => 80,
             0x54 => 96,

@@ -1,5 +1,5 @@
 use core::panic;
-use std::{borrow::BorrowMut, cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
 
 use chrono::{DateTime, Local};
 
@@ -341,7 +341,7 @@ impl<'a> Debugger<'a> {
                     let tile_data = self
                         .memory
                         .borrow()
-                        .get_range(tile_data_addr as u16..tile_data_addr as u16+ 16)
+                        .get_range(tile_data_addr as u16..tile_data_addr as u16 + 16)
                         .unwrap();
                     let mut pixel_x = tile_x * 8;
                     let mut pixel_y = tile_y * 8;
@@ -393,7 +393,7 @@ impl<'a> Debugger<'a> {
                 let mut buff: Vec<Color> = Vec::new();
                 for addr in 0..=0xFFFF {
                     let byte = self.memory.borrow().read_u8(addr);
-                    let color: Color =  ((byte as u32) << 16) | ((byte as u32) << 8) | byte as u32;
+                    let color: Color = ((byte as u32) << 16) | ((byte as u32) << 8) | byte as u32;
                     buff.push(color);
                 }
 

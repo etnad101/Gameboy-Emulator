@@ -1,19 +1,19 @@
+pub mod cartridge;
 mod cpu;
 pub mod debugger;
 mod errors;
 mod memory;
 mod ppu;
-pub mod cartridge;
 mod test;
 
 use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
 
+use cartridge::Cartridge;
 use cpu::Cpu;
 use debugger::{DebugFlags, Debugger};
 use errors::{CpuError, EmulatorError};
 use memory::MemoryBus;
 use ppu::Ppu;
-use cartridge::Cartridge;
 use test::TestData;
 
 use crate::Palette;

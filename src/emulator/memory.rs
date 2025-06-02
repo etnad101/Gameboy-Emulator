@@ -1,8 +1,8 @@
-use std::{error::Error, fs, ops::Range};
+use std::{fs, ops::Range};
 
 use super::{
     cartridge::{Cartridge, MBC},
-    errors::{EmulatorError, MemError},
+    errors::MemError,
 };
 
 pub struct MemoryBus {
@@ -52,10 +52,7 @@ impl MemoryBus {
         }
     }
 
-    pub fn load_rom(
-        &mut self,
-        p_rom: Cartridge,
-    ) {
+    pub fn load_rom(&mut self, p_rom: Cartridge) {
         dbg!(p_rom.title(), p_rom.mbc(), p_rom.rom_banks());
         match p_rom.mbc() {
             None => self.set_range(0x0000..0x8000, &p_rom.bytes()[0x0000..0x8000]),
@@ -73,7 +70,7 @@ impl MemoryBus {
             _ => println!("MBC Not supported yet"),
         }
 
-        self.cartridge =  Some(p_rom);
+        self.cartridge = Some(p_rom);
     }
 
     pub fn _clear(&mut self) {
@@ -112,7 +109,7 @@ impl MemoryBus {
     pub fn read_u8(&self, addr: u16) -> u8 {
         if self.boot_rom_active {
             if let 0x0000..=0x00FF = addr {
-                return self.boot_rom[addr as usize]
+                return self.boot_rom[addr as usize];
             }
         };
         match addr {
