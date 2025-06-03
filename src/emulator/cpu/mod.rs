@@ -9,11 +9,11 @@ use crate::{
         },
         memory::MemoryBus,
     },
-    utils::BitOps,
+    utils::bit_ops::BitOps,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use super::{errors::CpuError, test::State, Debugger};
+use super::{debug::DebugCtx, errors::CpuError, test::State};
 enum Direction {
     Left,
     Right,
@@ -39,7 +39,7 @@ enum DataType {
     None,
 }
 
-pub struct Cpu<'a> {
+pub struct Cpu {
     reg: Registers,
     sp: u16,
     pc: u16,
@@ -47,11 +47,11 @@ pub struct Cpu<'a> {
     normal_opcodes: HashMap<u8, Opcode>,
     prefixed_opcodes: HashMap<u8, Opcode>,
     memory: Rc<RefCell<MemoryBus>>,
-    debugger: Rc<RefCell<Debugger<'a>>>,
+    debugger: Rc<RefCell<DebugCtx>>,
 }
 
-impl<'a> Cpu<'a> {
-    pub fn new(memory: Rc<RefCell<MemoryBus>>, debugger: Rc<RefCell<Debugger<'a>>>) -> Self {
+impl Cpu {
+    pub fn new(memory: Rc<RefCell<MemoryBus>>, debugger: Rc<RefCell<DebugCtx>>) -> Self {
         Self {
             reg: Registers::new(),
             sp: 0,

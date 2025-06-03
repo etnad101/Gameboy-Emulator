@@ -1,6 +1,6 @@
 pub mod cartridge;
 mod cpu;
-pub mod debugger;
+pub mod debug;
 mod errors;
 mod memory;
 mod ppu;
@@ -10,7 +10,7 @@ use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
 
 use cartridge::Cartridge;
 use cpu::Cpu;
-use debugger::{DebugFlags, Debugger};
+use debug::{DebugCtx, DebugFlags};
 use errors::{CpuError, EmulatorError};
 use memory::MemoryBus;
 use ppu::Ppu;
@@ -19,61 +19,50 @@ use test::TestData;
 use crate::Palette;
 use simple_graphics::display::{Color, Display};
 
-const MEM_SIZE: u16 = 0xFFFF;
 const CPU_FREQ: usize = 4_194_304; // T-cycles
 const DIV_FREQ: usize = 16_384;
 const MAX_CYCLES_PER_FRAME: usize = 70_224; // CPU_FREQ / FRAME_RATE
 const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
 
 pub enum LCDRegister {
-    LCDC = 0xFF40,
-    STAT = 0xff41,
-    SCY = 0xff42,
-    SCX = 0xff43,
-    LY = 0xff44,
-    LYC = 0xff45,
-    DMA = 0xff46,
-    BGP = 0xff47,
-    OBP0 = 0xff48,
-    OBP1 = 0xff49,
+    Lcdc = 0xFF40,
+    Stat = 0xff41,
+    Scy = 0xff42,
+    Scx = 0xff43,
+    Ly = 0xff44,
+    Lyc = 0xff45,
+    Dma = 0xff46,
+    Bgp = 0xff47,
+    Obp0 = 0xff48,
+    Obp1 = 0xff49,
 }
 
 enum Timer {
-    DIV = 0xFF04,
-    TIMA = 0xFF05,
-    TMA = 0xFF06,
-    TAC = 0xFF07,
+    Div = 0xFF04,
+    Tima = 0xFF05,
+    Tma = 0xFF06,
+    Tac = 0xFF07,
 }
 
-pub struct Emulator<'a> {
-    cpu: Cpu<'a>,
-    ppu: Ppu<'a>,
+pub struct Emulator {
+    cpu: Cpu,
+    ppu: Ppu,
     memory: Rc<RefCell<MemoryBus>>,
-    debugger: Rc<RefCell<Debugger<'a>>>,
+    debugger: Rc<RefCell<DebugCtx>>,
     timer_cycles: usize,
     frames: usize,
     uptime_s: usize,
     paused: bool,
 }
 
-impl<'a> Emulator<'a> {
-    pub fn new(
-        palette: Palette,
-        debug_flags: Vec<DebugFlags>,
-        tile_window: Option<&'a mut Display>,
-        register_window: Option<&'a mut Display>,
-        background_map_window: Option<&'a mut Display>,
-        memory_view_window: Option<&'a mut Display>,
-    ) -> Self {
-        let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
+impl Emulator {
+    pub fn new(palette: Palette, debug_flags: Vec<DebugFlags>) -> Self {
+        let memory_bus = MemoryBus::new().unwrap();
+        let memory_bus = Rc::new(RefCell::new(memory_bus));
 
-        let debugger = Rc::new(RefCell::new(Debugger::new(
+        let debugger = Rc::new(RefCell::new(DebugCtx::new(
             debug_flags,
             Rc::clone(&memory_bus),
-            tile_window,
-            register_window,
-            background_map_window,
-            memory_view_window,
             palette,
         )));
 
@@ -92,7 +81,7 @@ impl<'a> Emulator<'a> {
     pub fn load_rom(&mut self, rom: Cartridge) -> Result<(), Box<dyn Error>> {
         println!("Loading rom: {}", rom.title());
         if rom.gb_compatible() {
-            self.memory.borrow_mut().load_rom(rom);
+            self.memory.borrow_mut().load_cartridge(rom);
             Ok(())
         } else {
             Err(Box::new(EmulatorError::IncompatibleRom))
@@ -102,7 +91,7 @@ impl<'a> Emulator<'a> {
     fn update_timers(&mut self, cycles: usize) {
         self.timer_cycles += cycles;
         if self.timer_cycles >= DIV_UPDATE_FREQ {
-            let addr = Timer::DIV as u16;
+            let addr = Timer::Div as u16;
             let div = self.memory.borrow().read_u8(addr);
             self.memory.borrow_mut().write_u8(addr, div);
             self.timer_cycles = 0;
@@ -113,7 +102,7 @@ impl<'a> Emulator<'a> {
         todo!()
     }
 
-    pub fn update(&mut self) -> Result<Vec<Color>, Box<dyn Error>> {
+    pub fn tick(&mut self) -> Result<Vec<Color>, Box<dyn Error>> {
         self.frames += 1;
         if self.frames >= 60 {
             self.uptime_s += 1;
@@ -135,15 +124,6 @@ impl<'a> Emulator<'a> {
         }
 
         Ok(self.ppu.get_frame())
-    }
-
-    pub fn update_debug_view(&mut self) {
-        self.debugger.borrow_mut().render_tiles();
-        self.debugger
-            .borrow_mut()
-            .render_register_window(self.cpu.get_registers());
-        self.debugger.borrow_mut().render_background_map();
-        self.debugger.borrow_mut().render_memory_viewer();
     }
 
     fn _load_state(&mut self, test: &TestData) {

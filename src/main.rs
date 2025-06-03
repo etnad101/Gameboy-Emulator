@@ -1,9 +1,11 @@
 /*
 * TODO
-* Add Memory bank switching(change how mem is stored)
-* Add object drawing
+* refactor everything to be more modular and represent actual architecture
+* use egui
 * Clean up code
 * Optimize so emulator runs faster
+* Add Memory bank switching(change how mem is stored)
+* Add object drawing
 * Add interrupts
 * Add RAM bank switching
 * Implement timer
@@ -28,13 +30,7 @@ const GRAY_PALETTE: Palette = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Init windows
-    // let mut register_window = Display::new("Register View", 300, 300, true)?;
-    // let font = Font::new("./fonts/retro-pixel-cute-mono.bdf").unwrap();
-    // register_window.set_font(font);
     let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
-    // let mut background_map_window = Display::new("BackgroundMap", 32 * 8, 32 * 8, false)?;
-    // let mut tile_window = Display::new("Tile Map", 128, 192, false)?;
-    // let mut memory_window = Display::new("Memory Viewer", 256, 256, false)?;
 
     let _dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
 
@@ -47,10 +43,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             // DebugFlags::ShowMemView,
             // DebugFlags::ShowRegisters,
         ],
-        None,
-        None,
-        None,
-        None,
     );
 
     emulator.load_rom(_dmg_acid2_rom)?;
@@ -59,14 +51,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
     emulator_window.set_background(WHITE);
     while emulator_window.is_open() {
-        let frame_buffer = match emulator.update() {
+        let frame_buffer = match emulator.tick() {
             Ok(frame) => frame,
             Err(e) => {
                 println!("{}", e);
                 return Ok(());
             }
         };
-        emulator.update_debug_view();
         emulator_window.clear();
         emulator_window.set_buffer(frame_buffer);
         emulator_window.render()?;
@@ -81,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new(GRAY_PALETTE, vec![], None, None, None, None);
+        let mut emulator = Emulator::new(GRAY_PALETTE, vec![]);
         assert!(emulator._run_opcode_tests().unwrap());
     }
 }

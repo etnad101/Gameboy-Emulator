@@ -1,4 +1,4 @@
-use crate::emulator::cpu::BitOps;
+use crate::utils::bit_ops::BitOps;
 
 #[derive(Clone)]
 pub struct Registers {
