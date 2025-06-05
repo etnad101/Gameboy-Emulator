@@ -4,9 +4,9 @@ use std::rc::Rc;
 
 use super::memory::MemoryBus;
 use super::{debug::DebugCtx, LCDRegister};
+use crate::utils::frame_buffer::FrameBuffer;
 use crate::Palette;
 use crate::{utils::bit_ops::BitOps, SCREEN_HEIGHT, SCREEN_WIDTH};
-use simple_graphics::display::{Color, WHITE};
 
 const CYCLES_PER_SCANLINE: usize = 456;
 
@@ -26,7 +26,7 @@ enum FetcherMode {
 }
 
 struct Fifo {
-    pixels: VecDeque<Color>,
+    pixels: VecDeque<u32>,
     max_size: usize,
 }
 
@@ -38,7 +38,7 @@ impl Fifo {
         }
     }
 
-    pub fn push(&mut self, pixel: Color) {
+    pub fn push(&mut self, pixel: u32) {
         if self.pixels.len() < self.max_size {
             self.pixels.push_front(pixel);
         } else {
@@ -46,7 +46,7 @@ impl Fifo {
         }
     }
 
-    pub fn pop(&mut self) -> Color {
+    pub fn pop(&mut self) -> u32 {
         self.pixels.pop_back().unwrap()
     }
 
@@ -62,7 +62,7 @@ impl Fifo {
 pub struct Ppu {
     memory: Rc<RefCell<MemoryBus>>,
     debugger: Rc<RefCell<DebugCtx>>,
-    buffer: Vec<Color>,
+    frame: FrameBuffer,
     mode: PpuMode,
     current_scanline_cycles: usize,
     fetcher_mode: FetcherMode,
@@ -87,7 +87,7 @@ impl Ppu {
         Self {
             memory,
             debugger,
-            buffer: vec![WHITE; SCREEN_WIDTH * SCREEN_HEIGHT],
+            frame: FrameBuffer::new(SCREEN_WIDTH, SCREEN_HEIGHT),
             mode: PpuMode::OAMScan,
             current_scanline_cycles: 0,
             fetcher_mode: FetcherMode::GetTile,
@@ -111,7 +111,7 @@ impl Ppu {
         self.memory.borrow().read_u8(addr)
     }
 
-    fn set_pixel(&mut self, x: usize, y: usize, color: Color) {
+    fn set_pixel(&mut self, x: usize, y: usize, color: u32) {
         if x > SCREEN_WIDTH {
             panic!("ERROR::PPU attempting to draw outside of buffer (width)")
         }
@@ -121,7 +121,7 @@ impl Ppu {
         }
 
         let index = (y * SCREEN_WIDTH) + x;
-        self.buffer[index] = color;
+        self.frame.write(index, color);
     }
 
     fn get_tile_number(&mut self) -> u8 {
@@ -163,7 +163,7 @@ impl Ppu {
             let lo = ((self.lo_byte & mask) >> bit) as u16;
             let hi = ((self.hi_byte & mask) >> bit) as u16;
             let data: u8 = ((hi << 1) | lo) as u8;
-            let color: Color = match data {
+            let color: u32 = match data {
                 0 => self.palette.0,
                 1 => self.palette.1,
                 2 => self.palette.2,
@@ -258,7 +258,7 @@ impl Ppu {
         }
     }
 
-    pub fn get_frame(&self) -> Vec<Color> {
-        self.buffer.clone()
+    pub fn get_frame(&self) -> &FrameBuffer {
+        &self.frame
     }
 }

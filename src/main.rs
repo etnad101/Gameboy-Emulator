@@ -11,15 +11,16 @@
 * Implement timer
 */
 
-mod drivers;
 mod emulator;
+mod gui;
 mod utils;
 
+use crate::gui::EmulatorGui;
 use std::error::Error;
 
 use emulator::{cartridge::Cartridge, Emulator};
-use simple_graphics::display::{Color, Display, WHITE};
 
+type Color = u32;
 type Palette = (Color, Color, Color, Color);
 
 const SCREEN_WIDTH: usize = 160;
@@ -29,9 +30,6 @@ const GREEN_PALETTE: Palette = (0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
 const GRAY_PALETTE: Palette = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Init windows
-    let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
-
     let _dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
 
     let mut emulator = Emulator::new(
@@ -47,22 +45,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     emulator.load_rom(_dmg_acid2_rom)?;
 
-    // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
-    emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
-    emulator_window.set_background(WHITE);
-    while emulator_window.is_open() {
-        let frame_buffer = match emulator.tick() {
-            Ok(frame) => frame,
-            Err(e) => {
-                println!("{}", e);
-                return Ok(());
-            }
-        };
-        emulator_window.clear();
-        emulator_window.set_buffer(frame_buffer);
-        emulator_window.render()?;
-    }
+    let options = eframe::NativeOptions {
+        ..Default::default()
+    };
 
+    eframe::run_native(
+        "Game Boy Emulator",
+        options,
+        Box::new(|_cc| Ok(Box::new(EmulatorGui::new(emulator)))),
+    )
+    .unwrap();
+
+    // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     Ok(())
 }
 

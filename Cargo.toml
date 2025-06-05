@@ -5,10 +5,14 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# Remove this for final release build
+[profile.profiling]
+inherits = "release"
+debug = true
+
 [dependencies]
-simple_graphics = { git = "https://github.com/etnad101/simple-graphics-rs" }
+egui = "0.31.1"
+eframe = "0.31.1"
+rfd = "0.15.3"
 chrono = "0.4.38"
 serde = { version = "1.0.203", features = ["derive"] }
 serde_json = "1.0.118"
-

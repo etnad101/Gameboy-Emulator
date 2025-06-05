@@ -16,8 +16,7 @@ use memory::MemoryBus;
 use ppu::Ppu;
 use test::TestData;
 
-use crate::Palette;
-use simple_graphics::display::{Color, Display};
+use crate::{utils::frame_buffer::FrameBuffer, Palette};
 
 const CPU_FREQ: usize = 4_194_304; // T-cycles
 const DIV_FREQ: usize = 16_384;
@@ -52,7 +51,7 @@ pub struct Emulator {
     timer_cycles: usize,
     frames: usize,
     uptime_s: usize,
-    paused: bool,
+    running: bool,
 }
 
 impl Emulator {
@@ -74,7 +73,7 @@ impl Emulator {
             timer_cycles: 0,
             frames: 0,
             uptime_s: 0,
-            paused: false,
+            running: false,
         }
     }
 
@@ -102,7 +101,7 @@ impl Emulator {
         todo!()
     }
 
-    pub fn tick(&mut self) -> Result<Vec<Color>, Box<dyn Error>> {
+    pub fn tick(&mut self) -> Result<&FrameBuffer, Box<dyn Error>> {
         self.frames += 1;
         if self.frames >= 60 {
             self.uptime_s += 1;

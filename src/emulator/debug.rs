@@ -8,8 +8,6 @@ use crate::{
     Palette,
 };
 
-use simple_graphics::display::{Color, Display, WHITE};
-
 use super::{cpu::registers::Registers, memory::MemoryBus, LCDRegister};
 
 const CALL_LOG_HISTORY_LENGTH: usize = 10;
@@ -228,7 +226,7 @@ impl DebugCtx {
             let mut pixel_x = tile_x * 8;
             let mut pixel_y = tile_y * 8;
             for data in tile_data {
-                let color: Color = match data {
+                let color: u32 = match data {
                     0 => self.palette.0,
                     1 => self.palette.1,
                     2 => self.palette.2,
@@ -282,7 +280,7 @@ impl DebugCtx {
                     let lo = ((lo_byte & (1 << bit)) >> bit) as u16;
                     let hi = ((hi_byte & (1 << bit)) >> bit) as u16;
                     let color_data: u8 = ((hi << 1) | lo) as u8;
-                    let color: Color = match color_data {
+                    let color: u32 = match color_data {
                         0 => self.palette.0,
                         1 => self.palette.1,
                         2 => self.palette.2,
