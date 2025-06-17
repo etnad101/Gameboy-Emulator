@@ -1,5 +1,5 @@
 use eframe::Frame;
-use egui::{Context, TextureOptions};
+use egui::{Context, Image, TextureOptions, Vec2};
 
 use crate::{emulator::Emulator, utils::frame_buffer::FrameBuffer, SCREEN_HEIGHT, SCREEN_WIDTH};
 
@@ -35,7 +35,10 @@ impl eframe::App for EmulatorGui {
                         mipmap_mode: None,
                     },
                 );
-                ui.image(&texture);
+                ui.add(Image::new(&texture).fit_to_exact_size(Vec2::new(
+                    SCREEN_WIDTH as f32 * 2.0,
+                    SCREEN_HEIGHT as f32 * 2.0,
+                )));
             }
         });
 

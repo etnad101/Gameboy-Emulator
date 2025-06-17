@@ -214,8 +214,7 @@ impl DebugCtx {
         let tile_data = self
             .memory
             .borrow()
-            .get_range(vram_start..vram_start + block_size)
-            .unwrap();
+            .get_range(vram_start..vram_start + block_size);
         let tiles = Tile::parse_tile_data(tile_data);
 
         let mut tile_x = 0;
@@ -260,7 +259,7 @@ impl DebugCtx {
         let mut tile_x = 0;
         let mut tile_y = 0;
         for tile in 0..32 * 32 {
-            let lcdc = self.memory.borrow().read_u8(LCDRegister::Lcdc as u16);
+            let lcdc = self.memory.borrow().read_u8(LCDRegister::Lcdc.into());
             let tile_num_base: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
             let tile_number_addr = tile_num_base + tile;
             let tile_number = self.memory.borrow().read_u8(tile_number_addr);
@@ -268,8 +267,7 @@ impl DebugCtx {
             let tile_data = self
                 .memory
                 .borrow()
-                .get_range(tile_data_addr as u16..tile_data_addr as u16 + 16)
-                .unwrap();
+                .get_range(tile_data_addr as u16..tile_data_addr as u16 + 16);
             let mut pixel_x = tile_x * 8;
             let mut pixel_y = tile_y * 8;
             let mut i = 0;

@@ -83,7 +83,7 @@ impl Ppu {
         debugger: Rc<RefCell<DebugCtx>>,
         palette: Palette,
     ) -> Self {
-        memory.borrow_mut().write_u8(LCDRegister::Ly as u16, 0);
+        memory.borrow_mut().write_u8(LCDRegister::Ly.into(), 0);
         Self {
             memory,
             debugger,
@@ -91,7 +91,7 @@ impl Ppu {
             mode: PpuMode::OAMScan,
             current_scanline_cycles: 0,
             fetcher_mode: FetcherMode::GetTile,
-            fetcher_x: 20,
+            fetcher_x: 0,
             scanline_x: 0,
             tile_number: 0,
             tile_addr: 0,
@@ -125,24 +125,24 @@ impl Ppu {
     }
 
     fn get_tile_number(&mut self) -> u8 {
-        let lcdc = self.read_mem_u8(LCDRegister::Lcdc as u16);
-        let ly = self.read_mem_u8(LCDRegister::Ly as u16) as u16;
-        let scx = self.read_mem_u8(LCDRegister::Scx as u16) as u16;
-        let scy = self.read_mem_u8(LCDRegister::Scy as u16) as u16;
+        let lcdc = self.read_mem_u8(LCDRegister::Lcdc.into());
+        let ly = self.read_mem_u8(LCDRegister::Ly.into()) as u16;
+        let scx = self.read_mem_u8(LCDRegister::Scx.into()) as u16;
+        let scy = self.read_mem_u8(LCDRegister::Scy.into()) as u16;
 
         let tile_map_base = ((lcdc >> 3) & 1) as u16;
         let tile_num_addr = 0x9800
             | (tile_map_base << 10)
             | ((((ly + scy) & 0xFF) >> 3) << 5)
-            | (((self.scanline_x as u16 + (scx & 7)) & 0xFF) >> 3); // TODO: THIS MIGHT FIX THE X OFFSET
+            | (((self.scanline_x as u16 + scx) & 0xFF) >> 3); // TODO: THIS MIGHT FIX THE X OFFSET
 
         self.read_mem_u8(tile_num_addr)
     }
 
     fn get_tile_data_low(&mut self) -> u8 {
-        let lcdc = self.read_mem_u8(LCDRegister::Lcdc as u16) as u16;
-        let ly = self.read_mem_u8(LCDRegister::Ly as u16) as u16;
-        let scy = self.read_mem_u8(LCDRegister::Scy as u16) as u16;
+        let lcdc = self.read_mem_u8(LCDRegister::Lcdc.into()) as u16;
+        let ly = self.read_mem_u8(LCDRegister::Ly.into()) as u16;
+        let scy = self.read_mem_u8(LCDRegister::Scy.into()) as u16;
         let bit_12 = if !(((lcdc & 0x10) > 0) || (self.tile_number & 0x80) > 0) {
             1
         } else {
@@ -179,7 +179,7 @@ impl Ppu {
     }
 
     pub fn update_graphics(&mut self, cycles: usize) {
-        let lcdc = self.read_mem_u8(LCDRegister::Lcdc as u16);
+        let lcdc = self.read_mem_u8(LCDRegister::Lcdc.into());
         if lcdc.get_bit(7) == 0 {
             return;
         }
@@ -217,7 +217,7 @@ impl Ppu {
 
                     if self.background_fifo.len() > 0 {
                         let color = self.background_fifo.pop();
-                        let ly = self.read_mem_u8(LCDRegister::Ly as u16);
+                        let ly = self.read_mem_u8(LCDRegister::Ly.into());
                         self.set_pixel(self.scanline_x as usize, ly as usize, color);
                         self.scanline_x += 1;
                     }
@@ -228,13 +228,13 @@ impl Ppu {
                 }
                 PpuMode::HBlank => {
                     if self.current_scanline_cycles >= CYCLES_PER_SCANLINE {
-                        let scx = self.read_mem_u8(LCDRegister::Scx as u16);
+                        let scx = self.read_mem_u8(LCDRegister::Scx.into());
                         self.scanline_x = 0;
                         self.fetcher_x = (scx & 7) >> 3;
                         self.current_scanline_cycles = 0;
-                        let mut ly = self.read_mem_u8(LCDRegister::Ly as u16);
+                        let mut ly = self.read_mem_u8(LCDRegister::Ly.into());
                         ly = ly.wrapping_add(1);
-                        self.write_mem_u8(LCDRegister::Ly as u16, ly);
+                        self.write_mem_u8(LCDRegister::Ly.into(), ly);
                         if ly >= 144 {
                             self.mode = PpuMode::VBlank
                         } else {
@@ -245,11 +245,11 @@ impl Ppu {
                 PpuMode::VBlank => {
                     if self.current_scanline_cycles >= CYCLES_PER_SCANLINE {
                         self.current_scanline_cycles = 0;
-                        let mut ly = self.read_mem_u8(LCDRegister::Ly as u16);
+                        let mut ly = self.read_mem_u8(LCDRegister::Ly.into());
                         ly = ly.wrapping_add(1);
-                        self.write_mem_u8(LCDRegister::Ly as u16, ly);
+                        self.write_mem_u8(LCDRegister::Ly.into(), ly);
                         if ly >= 153 {
-                            self.write_mem_u8(LCDRegister::Ly as u16, 0);
+                            self.write_mem_u8(LCDRegister::Ly.into(), 0);
                             self.mode = PpuMode::OAMScan
                         }
                     }

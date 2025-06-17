@@ -91,20 +91,16 @@ impl MemoryBus {
 
     pub fn write_u8(&mut self, addr: u16, value: u8) {
         // TODO: implement Echo RAM and range checks
-        let mut value = value;
-        match addr {
-            0x2000..=0x3FFF => {
-                println!("Changing rom bank by writing {value:#04x} to addr: {addr:#06x}");
-                let cartridge = self.cartridge.as_mut().unwrap();
-                cartridge.set_rom_bank(value);
-                return;
-            }
-            0xff04 => value = 0,
-            0xff50 => self.boot_rom_active = false,
-            _ => (),
+        let value = if addr == 0xff04 { 0 } else { value };
+        if addr == 0xff50 {
+            self.boot_rom_active = false;
         }
 
         match addr {
+            0x0000..=0x7FFF => {
+                let cartridge = self.cartridge.as_mut().unwrap();
+                cartridge.write(addr, value);
+            }
             0x8000..=0x9FFF => self.vram[addr as usize - 0x8000] = value,
             0xA000..=0xBFFF => self.ram[addr as usize - 0xA000] = value,
             0xC000..=0xDFFF => self.work_ram[addr as usize - 0xC000] = value,
@@ -117,9 +113,7 @@ impl MemoryBus {
         }
     }
 
-    pub fn get_range(&self, range: Range<u16>) -> Result<Vec<u8>, MemError> {
-        let bytes: Vec<u8> = range.into_iter().map(|i| self.read_u8(i)).collect();
-
-        Ok(bytes)
+    pub fn get_range(&self, range: Range<u16>) -> Vec<u8> {
+        range.into_iter().map(|i| self.read_u8(i)).collect()
     }
 }

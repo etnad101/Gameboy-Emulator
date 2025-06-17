@@ -46,9 +46,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     emulator.load_rom(_dmg_acid2_rom)?;
 
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_resizable(false)
-            .with_inner_size([600.0, 500.0]),
+        viewport: egui::ViewportBuilder::default().with_resizable(false),
         ..Default::default()
     };
 

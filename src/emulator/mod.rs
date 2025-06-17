@@ -24,23 +24,51 @@ const MAX_CYCLES_PER_FRAME: usize = 70_224; // CPU_FREQ / FRAME_RATE
 const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
 
 pub enum LCDRegister {
-    Lcdc = 0xFF40,
-    Stat = 0xff41,
-    Scy = 0xff42,
-    Scx = 0xff43,
-    Ly = 0xff44,
-    Lyc = 0xff45,
-    Dma = 0xff46,
-    Bgp = 0xff47,
-    Obp0 = 0xff48,
-    Obp1 = 0xff49,
+    Lcdc,
+    Stat,
+    Scy,
+    Scx,
+    Ly,
+    Lyc,
+    Dma,
+    Bgp,
+    Obp0,
+    Obp1,
+}
+
+impl From<LCDRegister> for u16 {
+    fn from(val: LCDRegister) -> u16 {
+        match val {
+            LCDRegister::Lcdc => 0xFF40,
+            LCDRegister::Stat => 0xff41,
+            LCDRegister::Scy => 0xff42,
+            LCDRegister::Scx => 0xff43,
+            LCDRegister::Ly => 0xff44,
+            LCDRegister::Lyc => 0xff45,
+            LCDRegister::Dma => 0xff46,
+            LCDRegister::Bgp => 0xff47,
+            LCDRegister::Obp0 => 0xff48,
+            LCDRegister::Obp1 => 0xff49,
+        }
+    }
 }
 
 enum Timer {
-    Div = 0xFF04,
-    Tima = 0xFF05,
-    Tma = 0xFF06,
-    Tac = 0xFF07,
+    Div,
+    Tima,
+    Tma,
+    Tac,
+}
+
+impl From<Timer> for u16 {
+    fn from(val: Timer) -> u16 {
+        match val {
+            Timer::Div => 0xFF04,
+            Timer::Tima => 0xFF05,
+            Timer::Tma => 0xFF06,
+            Timer::Tac => 0xFF07,
+        }
+    }
 }
 
 pub struct Emulator {
@@ -50,7 +78,6 @@ pub struct Emulator {
     debugger: Rc<RefCell<DebugCtx>>,
     timer_cycles: usize,
     frames: usize,
-    uptime_s: usize,
     running: bool,
 }
 
@@ -72,7 +99,6 @@ impl Emulator {
             debugger,
             timer_cycles: 0,
             frames: 0,
-            uptime_s: 0,
             running: false,
         }
     }
@@ -90,7 +116,7 @@ impl Emulator {
     fn update_timers(&mut self, cycles: usize) {
         self.timer_cycles += cycles;
         if self.timer_cycles >= DIV_UPDATE_FREQ {
-            let addr = Timer::Div as u16;
+            let addr = Timer::Div.into();
             let div = self.memory.borrow().read_u8(addr);
             self.memory.borrow_mut().write_u8(addr, div);
             self.timer_cycles = 0;
@@ -104,7 +130,6 @@ impl Emulator {
     pub fn tick(&mut self) -> Result<&FrameBuffer, Box<dyn Error>> {
         self.frames += 1;
         if self.frames >= 60 {
-            self.uptime_s += 1;
             self.frames = 0;
         }
 

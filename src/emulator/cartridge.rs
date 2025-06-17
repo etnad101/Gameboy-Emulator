@@ -151,6 +151,13 @@ impl Cartridge {
         }
     }
 
+    pub fn write(&mut self, addr: u16, value: u8) {
+        if let 0x2000..=0x3FFF = addr {
+            println!("Changing rom bank by writing {value:#04x} to addr: {addr:#06x}");
+            self.set_rom_bank(value);
+        }
+    }
+
     pub fn set_rom_bank(&mut self, bank_number: u8) {
         let bank_number = if bank_number == 0 {
             1
