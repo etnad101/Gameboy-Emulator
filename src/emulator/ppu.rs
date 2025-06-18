@@ -103,6 +103,10 @@ impl Ppu {
         }
     }
 
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+    }
+
     fn write_mem_u8(&self, addr: u16, value: u8) {
         self.memory.borrow_mut().write_u8(addr, value);
     }

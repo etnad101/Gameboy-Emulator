@@ -1,3 +1,5 @@
+//! Handles all debug related function
+
 use core::panic;
 use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
 
@@ -55,7 +57,7 @@ impl Tile {
 }
 
 #[derive(PartialEq)]
-pub enum DebugFlags {
+pub enum DebugFlag {
     ShowTileMap,
     ShowRegisters,
     ShowMemView,
@@ -64,37 +66,33 @@ pub enum DebugFlags {
 }
 
 pub struct DebugCtx {
-    active: bool,
-    flags: Vec<DebugFlags>,
+    flags: Vec<DebugFlag>,
     memory: Rc<RefCell<MemoryBus>>,
     palette: Palette,
     call_log: VecDeque<String>,
 }
 
 impl DebugCtx {
-    pub fn new(flags: Vec<DebugFlags>, memory: Rc<RefCell<MemoryBus>>, palette: Palette) -> Self {
-        let active = !flags.is_empty();
+    pub fn new(memory: Rc<RefCell<MemoryBus>>, palette: Palette) -> Self {
         Self {
-            active,
-            flags,
+            flags: Vec::new(),
             memory,
             palette,
             call_log: VecDeque::new(),
         }
     }
 
-    pub fn activate(&mut self) {
-        self.active = true
+    pub fn set_flags(&mut self, flags: Vec<DebugFlag>) {
+        self.flags = flags;
     }
 
-    pub fn deactivate(&mut self) {
-        self.active = false
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
     }
 
     pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
-        if (!self.active)
-            || (!self.flags.contains(&DebugFlags::DumpCallLog)
-                && !self.flags.contains(&DebugFlags::ShowRegisters))
+        if !self.flags.contains(&DebugFlag::DumpCallLog)
+            && !self.flags.contains(&DebugFlag::ShowRegisters)
         {
             return;
         }
@@ -107,9 +105,8 @@ impl DebugCtx {
     }
 
     pub fn create_call_log_dump(&self) -> Option<String> {
-        if (!self.active)
-            || (!self.flags.contains(&DebugFlags::DumpCallLog)
-                && !self.flags.contains(&DebugFlags::ShowRegisters))
+        if !self.flags.contains(&DebugFlag::DumpCallLog)
+            && !self.flags.contains(&DebugFlag::ShowRegisters)
         {
             return None;
         }
@@ -123,7 +120,7 @@ impl DebugCtx {
     }
 
     pub fn create_mem_dump(&self) -> Option<String> {
-        if (!self.active) || (!self.flags.contains(&DebugFlags::DumpMem)) {
+        if !self.flags.contains(&DebugFlag::DumpMem) {
             return None;
         }
 

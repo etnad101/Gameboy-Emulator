@@ -10,7 +10,7 @@ use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
 
 use cartridge::Cartridge;
 use cpu::Cpu;
-use debug::{DebugCtx, DebugFlags};
+use debug::{DebugCtx, DebugFlag};
 use errors::{CpuError, EmulatorError};
 use memory::MemoryBus;
 use ppu::Ppu;
@@ -75,32 +75,42 @@ pub struct Emulator {
     cpu: Cpu,
     ppu: Ppu,
     memory: Rc<RefCell<MemoryBus>>,
-    debugger: Rc<RefCell<DebugCtx>>,
+    debug_ctx: Rc<RefCell<DebugCtx>>,
     timer_cycles: usize,
     frames: usize,
     running: bool,
 }
 
 impl Emulator {
-    pub fn new(palette: Palette, debug_flags: Vec<DebugFlags>) -> Self {
+    /// Creates a new emulator instance
+    pub fn new() -> Self {
         let memory_bus = MemoryBus::new().unwrap();
         let memory_bus = Rc::new(RefCell::new(memory_bus));
 
-        let debugger = Rc::new(RefCell::new(DebugCtx::new(
-            debug_flags,
-            Rc::clone(&memory_bus),
-            palette,
-        )));
+        let palette: Palette = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
+
+        let debug_ctx = Rc::new(RefCell::new(DebugCtx::new(Rc::clone(&memory_bus), palette)));
 
         Emulator {
-            cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debugger)),
-            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debugger), palette),
+            cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx)),
+            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx), palette),
             memory: Rc::clone(&memory_bus),
-            debugger,
+            debug_ctx,
             timer_cycles: 0,
             frames: 0,
             running: false,
         }
+    }
+
+    pub fn with_debug_flags(self, debug_flags: Vec<DebugFlag>) -> Self {
+        self.debug_ctx.borrow_mut().set_flags(debug_flags);
+        self
+    }
+
+    pub fn with_palette(mut self, palette: Palette) -> Self {
+        self.debug_ctx.borrow_mut().set_palette(palette);
+        self.ppu.set_palette(palette);
+        self
     }
 
     pub fn load_rom(&mut self, rom: Cartridge) -> Result<(), Box<dyn Error>> {
@@ -127,6 +137,7 @@ impl Emulator {
         todo!()
     }
 
+    /// Ticks emulator one frame
     pub fn tick(&mut self) -> Result<&FrameBuffer, Box<dyn Error>> {
         self.frames += 1;
         if self.frames >= 60 {

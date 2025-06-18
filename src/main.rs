@@ -21,27 +21,18 @@ use std::error::Error;
 use emulator::{cartridge::Cartridge, Emulator};
 
 type Color = u32;
-type Palette = (Color, Color, Color, Color);
+type Palette = (u32, u32, u32, u32);
 
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
-const GREEN_PALETTE: Palette = (0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
-const GRAY_PALETTE: Palette = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
+const GREEN_PALETTE: (u32, u32, u32, u32) = (0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
+const GRAY_PALETTE: (u32, u32, u32, u32) = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
 
 fn main() -> Result<(), Box<dyn Error>> {
     let _dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
 
-    let mut emulator = Emulator::new(
-        GRAY_PALETTE,
-        vec![
-            // DebugFlags::DumpMem,
-            // DebugFlags::DumpCallLog,
-            // DebugFlags::ShowTileMap,
-            // DebugFlags::ShowMemView,
-            // DebugFlags::ShowRegisters,
-        ],
-    );
+    let mut emulator = Emulator::new();
 
     emulator.load_rom(_dmg_acid2_rom)?;
 
@@ -67,7 +58,7 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new(GRAY_PALETTE, vec![]);
+        let mut emulator = Emulator::new();
         assert!(emulator._run_opcode_tests().unwrap());
     }
 }
