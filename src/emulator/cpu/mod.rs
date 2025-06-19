@@ -70,7 +70,7 @@ impl Cpu {
         self.reg.clone()
     }
 
-    pub fn crash(&mut self, error: CpuError) -> CpuError {
+    pub fn crash(&self, error: CpuError) -> CpuError {
         self.debugger.borrow_mut().dump_logs();
         eprintln!("{:#06x}", self.pc);
         error
@@ -798,16 +798,17 @@ impl Cpu {
         let before = self.sp;
         self.sp = (self.sp as i16).wrapping_add(value as i16) as u16;
 
-        let full_carry: bool;
-        let half_carry: bool;
-
-        if value >= 0 {
-            full_carry = ((before as i16 & 0xFF) + s8) > 0xFF;
-            half_carry = ((before as i16 & 0xF) + (s8 & 0xF)) > 0xF;
+        let full_carry: bool = if value >= 0 {
+            ((before as i16 & 0xFF) + s8) > 0xFF
         } else {
-            full_carry = (self.sp & 0xFF) < (before & 0xFF);
-            half_carry = (self.sp & 0xF) < (before & 0xF);
-        }
+            (self.sp & 0xFF) < (before & 0xFF)
+        };
+
+        let half_carry: bool = if value >= 0 {
+            ((before as i16 & 0xF) + (s8 & 0xF)) > 0xF
+        } else {
+            (self.sp & 0xF) < (before & 0xF)
+        };
 
         self.reg.clear_z_flag();
         self.reg.clear_n_flag();
@@ -1388,7 +1389,7 @@ impl Cpu {
         Ok(opcode_cycles + extra_cycles)
     }
 
-    pub fn _load_state(&mut self, state: &State) {
+    pub fn load_state(&mut self, state: &State) {
         self.reg.a = state.a;
         self.reg.b = state.b;
         self.reg.c = state.c;
@@ -1401,7 +1402,7 @@ impl Cpu {
         self.pc = state.pc;
     }
 
-    pub fn _get_state(&self) -> (u8, u8, u8, u8, u8, u8, u8, u8, u16, u16) {
+    pub fn get_state(&self) -> (u8, u8, u8, u8, u8, u8, u8, u8, u16, u16) {
         (
             self.reg.a, self.reg.b, self.reg.c, self.reg.d, self.reg.e, self.reg.f, self.reg.h,
             self.reg.l, self.sp, self.pc,

@@ -30,7 +30,7 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn from(rom_path: &str) -> Result<Cartridge, Error> {
+    pub fn from(rom_path: &str) -> Result<Self, Error> {
         println!("Looking for rom at '{}'", rom_path);
         let raw_file = fs::read(rom_path)?;
         let cgb_flag = raw_file[0x143];
@@ -52,7 +52,7 @@ impl Cartridge {
             }
         };
 
-        let title = String::from_utf8(title_bytes.clone()).unwrap();
+        let title = String::from_utf8(title_bytes).unwrap();
 
         println!("Found Rom: {}", title);
 
@@ -113,7 +113,7 @@ impl Cartridge {
             _ => println!("MBC Not supported yet"),
         }
 
-        Ok(Cartridge {
+        Ok(Self {
             title,
             gb_compatible,
             mbc,

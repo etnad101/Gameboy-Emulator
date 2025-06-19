@@ -11,6 +11,12 @@
 * Implement timer
 */
 
+#![warn(clippy::all)]
+//#![deny(clippy::unwrap_used)]
+//#![deny(clippy::panic)]
+//#![warn(clippy::cargo)]
+//#![warn(clippy::restriction)]
+
 mod emulator;
 mod gui;
 mod utils;
@@ -26,15 +32,15 @@ type Palette = (u32, u32, u32, u32);
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
-const GREEN_PALETTE: (u32, u32, u32, u32) = (0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
-const GRAY_PALETTE: (u32, u32, u32, u32) = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
+const GREEN_PALETTE: Palette = (0x9BBC0F, 0x8BAC0F, 0x306230, 0x0F380F);
+const GRAY_PALETTE: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let _dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
+    let dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
 
     let mut emulator = Emulator::new();
 
-    emulator.load_rom(_dmg_acid2_rom)?;
+    emulator.load_rom(dmg_acid2_rom)?;
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_resizable(false),
@@ -59,6 +65,6 @@ mod tests {
     #[test]
     fn test_opcodes() {
         let mut emulator = Emulator::new();
-        assert!(emulator._run_opcode_tests().unwrap());
+        assert!(emulator.run_opcode_tests().unwrap());
     }
 }

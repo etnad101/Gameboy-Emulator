@@ -52,7 +52,7 @@ impl MemoryBus {
         self.cartridge = Some(cartridge);
     }
 
-    pub fn _clear(&mut self) {
+    pub fn clear(&mut self) {
         self.vram = vec![0xFF; 0x2000];
         self.ram = vec![0xFF; 0x2000];
         self.work_ram = vec![0xFF; 0x2000];

@@ -15,7 +15,7 @@ pub struct Registers {
 impl Registers {
     pub fn new() -> Self {
         let (a, b, c, d, e, f, h, l) = (0, 0, 0, 0, 0, 0, 0, 0);
-        Registers {
+        Self {
             a,
             b,
             c,
