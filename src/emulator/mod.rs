@@ -1,98 +1,122 @@
+pub mod cartridge;
 mod cpu;
-pub mod debugger;
+pub mod debug;
 mod errors;
 mod memory;
 mod ppu;
-pub mod cartridge;
 mod test;
 
 use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
 
+use cartridge::Cartridge;
 use cpu::Cpu;
-use debugger::{DebugFlags, Debugger};
+use debug::{DebugCtx, DebugFlag};
 use errors::{CpuError, EmulatorError};
 use memory::MemoryBus;
 use ppu::Ppu;
-use cartridge::Cartridge;
 use test::TestData;
 
-use crate::Palette;
-use simple_graphics::display::{Color, Display};
+use crate::{utils::frame_buffer::FrameBuffer, Palette};
 
-const MEM_SIZE: u16 = 0xFFFF;
 const CPU_FREQ: usize = 4_194_304; // T-cycles
 const DIV_FREQ: usize = 16_384;
 const MAX_CYCLES_PER_FRAME: usize = 70_224; // CPU_FREQ / FRAME_RATE
 const DIV_UPDATE_FREQ: usize = CPU_FREQ / DIV_FREQ;
 
 pub enum LCDRegister {
-    LCDC = 0xFF40,
-    STAT = 0xff41,
-    SCY = 0xff42,
-    SCX = 0xff43,
-    LY = 0xff44,
-    LYC = 0xff45,
-    DMA = 0xff46,
-    BGP = 0xff47,
-    OBP0 = 0xff48,
-    OBP1 = 0xff49,
+    Lcdc,
+    Stat,
+    Scy,
+    Scx,
+    Ly,
+    Lyc,
+    Dma,
+    Bgp,
+    Obp0,
+    Obp1,
+}
+
+impl From<LCDRegister> for u16 {
+    fn from(val: LCDRegister) -> Self {
+        match val {
+            LCDRegister::Lcdc => 0xFF40,
+            LCDRegister::Stat => 0xff41,
+            LCDRegister::Scy => 0xff42,
+            LCDRegister::Scx => 0xff43,
+            LCDRegister::Ly => 0xff44,
+            LCDRegister::Lyc => 0xff45,
+            LCDRegister::Dma => 0xff46,
+            LCDRegister::Bgp => 0xff47,
+            LCDRegister::Obp0 => 0xff48,
+            LCDRegister::Obp1 => 0xff49,
+        }
+    }
 }
 
 enum Timer {
-    DIV = 0xFF04,
-    TIMA = 0xFF05,
-    TMA = 0xFF06,
-    TAC = 0xFF07,
+    Div,
+    Tima,
+    Tma,
+    Tac,
 }
 
-pub struct Emulator<'a> {
-    cpu: Cpu<'a>,
-    ppu: Ppu<'a>,
+impl From<Timer> for u16 {
+    fn from(val: Timer) -> Self {
+        match val {
+            Timer::Div => 0xFF04,
+            Timer::Tima => 0xFF05,
+            Timer::Tma => 0xFF06,
+            Timer::Tac => 0xFF07,
+        }
+    }
+}
+
+pub struct Emulator {
+    cpu: Cpu,
+    ppu: Ppu,
     memory: Rc<RefCell<MemoryBus>>,
-    debugger: Rc<RefCell<Debugger<'a>>>,
+    debug_ctx: Rc<RefCell<DebugCtx>>,
     timer_cycles: usize,
     frames: usize,
-    uptime_s: usize,
-    paused: bool,
+    running: bool,
 }
 
-impl<'a> Emulator<'a> {
-    pub fn new(
-        palette: Palette,
-        debug_flags: Vec<DebugFlags>,
-        tile_window: Option<&'a mut Display>,
-        register_window: Option<&'a mut Display>,
-        background_map_window: Option<&'a mut Display>,
-        memory_view_window: Option<&'a mut Display>,
-    ) -> Self {
-        let memory_bus = Rc::new(RefCell::new(MemoryBus::new(MEM_SIZE)));
+impl Emulator {
+    /// Creates a new emulator instance
+    pub fn new() -> Self {
+        let memory_bus = MemoryBus::new().unwrap();
+        let memory_bus = Rc::new(RefCell::new(memory_bus));
 
-        let debugger = Rc::new(RefCell::new(Debugger::new(
-            debug_flags,
-            Rc::clone(&memory_bus),
-            tile_window,
-            register_window,
-            background_map_window,
-            memory_view_window,
-            palette,
-        )));
+        let palette: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
-        Emulator {
-            cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debugger)),
-            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debugger), palette),
+        let debug_ctx = Rc::new(RefCell::new(DebugCtx::new(Rc::clone(&memory_bus), palette)));
+
+        Self {
+            cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx)),
+            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx), palette),
             memory: Rc::clone(&memory_bus),
-            debugger,
+            debug_ctx,
             timer_cycles: 0,
             frames: 0,
-            uptime_s: 0,
-            paused: false,
+            running: false,
         }
     }
 
-    pub fn load_rom(&mut self, rom: Cartridge) -> Result<(), Box<dyn Error>> {
+    pub fn with_debug_flags(self, debug_flags: Vec<DebugFlag>) -> Self {
+        self.debug_ctx.borrow_mut().set_flags(debug_flags);
+        self
+    }
+
+    pub fn with_palette(mut self, palette: Palette) -> Self {
+        self.debug_ctx.borrow_mut().set_palette(palette);
+        self.ppu.set_palette(palette);
+        self
+    }
+
+    pub fn load_rom(&self, rom: Cartridge) -> Result<(), Box<dyn Error>> {
         println!("Loading rom: {}", rom.title());
         if rom.gb_compatible() {
-            self.memory.borrow_mut().load_rom(rom);
+            self.memory.borrow_mut().load_cartridge(rom);
             Ok(())
         } else {
             Err(Box::new(EmulatorError::IncompatibleRom))
@@ -102,7 +126,7 @@ impl<'a> Emulator<'a> {
     fn update_timers(&mut self, cycles: usize) {
         self.timer_cycles += cycles;
         if self.timer_cycles >= DIV_UPDATE_FREQ {
-            let addr = Timer::DIV as u16;
+            let addr = Timer::Div.into();
             let div = self.memory.borrow().read_u8(addr);
             self.memory.borrow_mut().write_u8(addr, div);
             self.timer_cycles = 0;
@@ -113,10 +137,10 @@ impl<'a> Emulator<'a> {
         todo!()
     }
 
-    pub fn update(&mut self) -> Result<Vec<Color>, Box<dyn Error>> {
+    /// Ticks emulator one frame
+    pub fn tick(&mut self) -> Result<&FrameBuffer, Box<dyn Error>> {
         self.frames += 1;
         if self.frames >= 60 {
-            self.uptime_s += 1;
             self.frames = 0;
         }
 
@@ -137,18 +161,9 @@ impl<'a> Emulator<'a> {
         Ok(self.ppu.get_frame())
     }
 
-    pub fn update_debug_view(&mut self) {
-        self.debugger.borrow_mut().render_tiles();
-        self.debugger
-            .borrow_mut()
-            .render_register_window(self.cpu.get_registers());
-        self.debugger.borrow_mut().render_background_map();
-        self.debugger.borrow_mut().render_memory_viewer();
-    }
-
-    fn _load_state(&mut self, test: &TestData) {
-        self.cpu._load_state(&test.initial);
-        self.memory.borrow_mut()._clear();
+    fn load_state(&mut self, test: &TestData) {
+        self.cpu.load_state(&test.initial);
+        self.memory.borrow_mut().clear();
         for mem_state in test.initial.ram.iter().cloned() {
             let addr = mem_state[0];
             let value = mem_state[1] as u8;
@@ -156,8 +171,8 @@ impl<'a> Emulator<'a> {
         }
     }
 
-    fn _check_state(&self, test: &TestData) -> bool {
-        let (a, b, c, d, e, f, h, l, sp, pc) = self.cpu._get_state();
+    fn check_state(&self, test: &TestData) -> bool {
+        let (a, b, c, d, e, f, h, l, sp, pc) = self.cpu.get_state();
         let equal = a == test.final_name.a
             && b == test.final_name.b
             && c == test.final_name.c
@@ -219,7 +234,7 @@ impl<'a> Emulator<'a> {
     }
 
     // Test Code
-    pub fn _run_opcode_tests(&mut self) -> Result<bool, Box<dyn Error>> {
+    pub fn run_opcode_tests(&mut self) -> Result<bool, Box<dyn Error>> {
         let mut all_passed = true;
         let test_dir = fs::read_dir("./tests")?;
         for file in test_dir {
@@ -238,7 +253,7 @@ impl<'a> Emulator<'a> {
             'inner: for test in test_data {
                 current_test += 1;
                 std::io::stdout().flush().unwrap();
-                self._load_state(&test);
+                self.load_state(&test);
                 match self.cpu.execute_next_opcode() {
                     Ok(_) => (),
                     Err(CpuError::OpcodeError(e)) => {
@@ -250,7 +265,7 @@ impl<'a> Emulator<'a> {
                     }
                 }
 
-                if self._check_state(&test) {
+                if self.check_state(&test) {
                     passed += 1;
                 } else {
                     all_passed = false;

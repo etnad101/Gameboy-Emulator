@@ -1,4 +1,4 @@
-use crate::emulator::cpu::BitOps;
+use crate::utils::bit_ops::BitOps;
 
 #[derive(Clone)]
 pub struct Registers {
@@ -15,7 +15,7 @@ pub struct Registers {
 impl Registers {
     pub fn new() -> Self {
         let (a, b, c, d, e, f, h, l) = (0, 0, 0, 0, 0, 0, 0, 0);
-        Registers {
+        Self {
             a,
             b,
             c,
@@ -28,7 +28,7 @@ impl Registers {
     }
 
     pub fn af(&self) -> u16 {
-        (self.a as u16) << 8 | (self.f as u16)
+        ((self.a as u16) << 8) | (self.f as u16)
     }
 
     pub fn set_af(&mut self, value: u16) {
@@ -37,7 +37,7 @@ impl Registers {
     }
 
     pub fn bc(&self) -> u16 {
-        (self.b as u16) << 8 | (self.c as u16)
+        ((self.b as u16) << 8) | (self.c as u16)
     }
 
     pub fn set_bc(&mut self, value: u16) {
@@ -46,7 +46,7 @@ impl Registers {
     }
 
     pub fn de(&self) -> u16 {
-        (self.d as u16) << 8 | (self.e as u16)
+        ((self.d as u16) << 8) | (self.e as u16)
     }
 
     pub fn set_de(&mut self, value: u16) {
@@ -55,7 +55,7 @@ impl Registers {
     }
 
     pub fn hl(&self) -> u16 {
-        (self.h as u16) << 8 | (self.l as u16)
+        ((self.h as u16) << 8) | (self.l as u16)
     }
 
     pub fn set_hl(&mut self, value: u16) {

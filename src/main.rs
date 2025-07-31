@@ -1,85 +1,60 @@
 /*
 * TODO
-* Add Memory bank switching(change how mem is stored)
-* Add object drawing
+* refactor everything to be more modular and represent actual architecture
+* use egui
 * Clean up code
 * Optimize so emulator runs faster
+* Add Memory bank switching(change how mem is stored)
+* Add object drawing
 * Add interrupts
 * Add RAM bank switching
 * Implement timer
 */
 
-mod drivers;
+#![warn(clippy::all)]
+//#![deny(clippy::unwrap_used)]
+//#![deny(clippy::panic)]
+//#![warn(clippy::cargo)]
+//#![warn(clippy::restriction)]
+
 mod emulator;
+mod gui;
 mod utils;
 
-use std::{error::Error, mem};
+use crate::gui::EmulatorGui;
+use std::error::Error;
 
-use emulator::{cartridge::Cartridge, debugger::DebugFlags, Emulator};
-use serde_json::error::Category;
-use simple_graphics::{display::{Color, Display, WHITE}, fonts::Font};
+use emulator::{cartridge::Cartridge, Emulator};
 
-type Palette = (Color, Color, Color, Color);
+type Color = u32;
+type Palette = (u32, u32, u32, u32);
 
 const SCREEN_WIDTH: usize = 160;
 const SCREEN_HEIGHT: usize = 144;
 
-const GREEN_PALETTE: Palette = (0x009BBC0F, 0x008BAC0F, 0x00306230, 0x000F380F);
-const GRAY_PALETTE: Palette = (0x00FFFFFF, 0x00a9a9a9, 0x00545454, 0x00000000);
+const GREEN_PALETTE: Palette = (0x9BBC0F, 0x8BAC0F, 0x306230, 0x0F380F);
+const GRAY_PALETTE: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
 fn main() -> Result<(), Box<dyn Error>> {
-    // Init windows
-    // let mut register_window = Display::new("Register View", 300, 300, true)?;
-    // let font = Font::new("./fonts/retro-pixel-cute-mono.bdf").unwrap();
-    // register_window.set_font(font);
-    let mut emulator_window = Display::new("Game Boy Emulator", SCREEN_WIDTH, SCREEN_HEIGHT, true)?;
-    let mut background_map_window = Display::new("BackgroundMap", 32 * 8, 32 * 8, false)?;
-    let mut tile_window = Display::new("Tile Map", 128, 192, false)?;
-    // let mut memory_window = Display::new("Memory Viewer", 256, 256, false)?;
+    let dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
 
-    let _dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
-    let _cpu_instrs_test_rom = Cartridge::from("./roms/tests/cpu_instrs/cpu_instrs.gb")?; // fail
-    let _instr_timing = Cartridge::from("./roms/tests/instr_timing/instr_timing.gb")?;
-    let _mealy = Cartridge::from("./roms/tests/mealybug-tearoom-tests/m3_scy_change.gb")?;
-    let _tetris = Cartridge::from("./roms/games/tetris.gb")?;
-    let _dr_mario = Cartridge::from("./roms/games/Dr. Mario (World).gb")?;
-    let _pokemon = Cartridge::from("./roms/games/Pokemon Red.gb")?;
-    // let _bubble_bobble = Cartridge::from("./roms/games/Bubble Bobble (USA, Europe).gb")?;
+    let mut emulator = Emulator::new();
 
-    let mut emulator = Emulator::new(
-        GRAY_PALETTE,
-        vec![
-            // DebugFlags::DumpMem,
-            // DebugFlags::DumpCallLog,
-            DebugFlags::ShowTileMap,
-            // DebugFlags::ShowMemView,
-            // DebugFlags::ShowRegisters,
-        ],
-        Some(&mut tile_window),
-        None,
-        Some(&mut background_map_window),
-        None,
-    );
+    emulator.load_rom(dmg_acid2_rom)?;
 
-    emulator.load_rom(_dr_mario)?;
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_resizable(false),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "Game Boy Emulator",
+        options,
+        Box::new(|_cc| Ok(Box::new(EmulatorGui::new(emulator)))),
+    )
+    .unwrap();
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
-    emulator_window.limit_frame_rate(Some(std::time::Duration::from_micros(16740)));
-    emulator_window.set_background(WHITE);
-    while emulator_window.is_open() {
-        let frame_buffer = match emulator.update() {
-            Ok(frame) => frame,
-            Err(e) => {
-                println!("{}", e);
-                return Ok(());
-            }
-        };
-        emulator.update_debug_view();
-        emulator_window.clear();
-        emulator_window.set_buffer(frame_buffer);
-        emulator_window.render()?;
-    }
-
     Ok(())
 }
 
@@ -89,7 +64,7 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new(GRAY_PALETTE, vec![], None, None, None, None);
-        assert!(emulator._run_opcode_tests().unwrap());
+        let mut emulator = Emulator::new();
+        assert!(emulator.run_opcode_tests().unwrap());
     }
 }

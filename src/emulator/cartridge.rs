@@ -15,44 +15,48 @@ pub(super) enum MBC {
 }
 
 pub struct Cartridge {
-    bytes: Vec<u8>,
+    // Cartridge header information
     title: String,
     gb_compatible: bool,
     mbc: Option<MBC>,
-    rom_banks: usize,
     ram: bool,
     battery: bool,
     timer: bool,
+
+    // catridge ram and rom
+    fixed_rom_bank: Vec<u8>,
+    switchable_banks: Vec<Vec<u8>>,
+    current_bank: usize,
 }
 
 impl Cartridge {
-    pub fn from(rom_path: &str) -> Result<Cartridge, Error> {
+    pub fn from(rom_path: &str) -> Result<Self, Error> {
         println!("Looking for rom at '{}'", rom_path);
-        let bytes = fs::read(rom_path)?;
-        let cgb_flag = bytes[0x143];
+        let raw_file = fs::read(rom_path)?;
+        let cgb_flag = raw_file[0x143];
         let (gb_compatible, title_bytes) = match cgb_flag {
             0x80 => {
-                let title_bytes = &bytes[0x134..=0x142];
+                let title_bytes = &raw_file[0x134..=0x142];
                 let title_bytes = title_bytes.to_owned();
                 (true, title_bytes)
             }
             0xC0 => {
-                let title_bytes = &bytes[0x134..=0x142];
+                let title_bytes = &raw_file[0x134..=0x142];
                 let title_bytes = title_bytes.to_owned();
                 (false, title_bytes)
             }
             _ => {
-                let title_bytes = &bytes[0x134..=0x143];
+                let title_bytes = &raw_file[0x134..=0x143];
                 let title_bytes = title_bytes.to_owned();
                 (true, title_bytes)
             }
         };
 
-        let title = String::from_utf8(title_bytes.clone()).unwrap();
+        let title = String::from_utf8(title_bytes).unwrap();
 
         println!("Found Rom: {}", title);
 
-        let (mbc, ram, battery, timer) = match bytes[0x147] {
+        let (mbc, ram, battery, timer) = match raw_file[0x147] {
             0x00 => (None, false, false, false),
             0x01 => (Some(MBC::MBC1), false, false, false),
             0x02 => (Some(MBC::MBC1), true, false, false),
@@ -78,26 +82,48 @@ impl Cartridge {
             _ => panic!("Cartridge type not implemented yet"),
         };
 
-        let rom_banks = match bytes[0x148] {
+        let rom_banks = match raw_file[0x148] {
             0x00..=0x08 => {
                 let base: usize = 2;
-                base.pow(bytes[0x148] as u32)
-            },
+                base.pow(raw_file[0x148] as u32)
+            }
             0x52 => 72,
             0x53 => 80,
             0x54 => 96,
             _ => panic!("No other rom sizes"),
         };
 
-        Ok(Cartridge {
-            bytes,
+        let fixed_rom_bank: Vec<u8> = raw_file[0x0000..0x4000].to_vec();
+        let mut switchable_banks: Vec<Vec<u8>> = Vec::new();
+
+        match mbc {
+            None => {
+                switchable_banks.push(raw_file[0x4000..0x8000].to_vec());
+            }
+            Some(MBC::MBC1) => {
+                for i in 0..rom_banks {
+                    println!("creating bank");
+                    let start = 0x4000 * i;
+                    let end = start + 0x4000;
+                    let bank: &[u8] = &raw_file[start..end];
+                    switchable_banks.push(bank.to_vec());
+                }
+                println!("rom_banks created: {}", switchable_banks.len());
+            }
+            _ => println!("MBC Not supported yet"),
+        }
+
+        Ok(Self {
             title,
             gb_compatible,
             mbc,
-            rom_banks,
             ram,
             battery,
             timer,
+
+            fixed_rom_bank,
+            switchable_banks,
+            current_bank: 0,
         })
     }
 
@@ -106,18 +132,38 @@ impl Cartridge {
     }
 
     pub fn bytes(&self) -> Vec<u8> {
-        self.bytes.clone()
+        self.fixed_rom_bank.clone()
     }
 
     pub fn gb_compatible(&self) -> bool {
         self.gb_compatible
     }
 
-    pub fn rom_banks(&self) -> usize {
-        self.rom_banks
-    }
-
     pub(super) fn mbc(&self) -> Option<MBC> {
         self.mbc.clone()
+    }
+
+    pub fn read(&self, addr: u16) -> u8 {
+        if addr < 0x4000 {
+            self.fixed_rom_bank[addr as usize]
+        } else {
+            self.switchable_banks[self.current_bank][addr as usize - 0x4000]
+        }
+    }
+
+    pub fn write(&mut self, addr: u16, value: u8) {
+        if let 0x2000..=0x3FFF = addr {
+            println!("Changing rom bank by writing {value:#04x} to addr: {addr:#06x}");
+            self.set_rom_bank(value);
+        }
+    }
+
+    pub fn set_rom_bank(&mut self, bank_number: u8) {
+        let bank_number = if bank_number == 0 {
+            1
+        } else {
+            bank_number & 0x1f
+        };
+        self.current_bank = (bank_number - 1) as usize;
     }
 }
