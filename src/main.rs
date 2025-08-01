@@ -36,11 +36,12 @@ const GREEN_PALETTE: Palette = (0x9BBC0F, 0x8BAC0F, 0x306230, 0x0F380F);
 const GRAY_PALETTE: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?; // fail
+    let dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?;
+    let dr_mario = Cartridge::from("./roms/games/DrMario.gb")?;
 
-    let mut emulator = Emulator::new();
+    let emulator = Emulator::new();
 
-    emulator.load_rom(dmg_acid2_rom)?;
+    emulator.load_rom(dr_mario)?;
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_resizable(false),

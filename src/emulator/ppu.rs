@@ -75,6 +75,7 @@ pub struct Ppu {
     background_fifo: Fifo,
     object_fifo: Fifo,
     palette: Palette,
+    pixels_to_discard: u8,  // For fine scrolling
 }
 
 impl Ppu {
@@ -100,6 +101,7 @@ impl Ppu {
             background_fifo: Fifo::new(),
             object_fifo: Fifo::new(),
             palette,
+            pixels_to_discard: 0,
         }
     }
 
@@ -131,14 +133,13 @@ impl Ppu {
     fn get_tile_number(&mut self) -> u8 {
         let lcdc = self.read_mem_u8(LCDRegister::Lcdc.into());
         let ly = self.read_mem_u8(LCDRegister::Ly.into()) as u16;
-        let scx = self.read_mem_u8(LCDRegister::Scx.into()) as u16;
         let scy = self.read_mem_u8(LCDRegister::Scy.into()) as u16;
 
         let tile_map_base = ((lcdc >> 3) & 1) as u16;
         let tile_num_addr = 0x9800
             | (tile_map_base << 10)
             | ((((ly + scy) & 0xFF) >> 3) << 5)
-            | (((self.scanline_x as u16 + scx) & 0xFF) >> 3); // TODO: THIS MIGHT FIX THE X OFFSET
+            | (self.fetcher_x as u16 & 0x1F); 
 
         self.read_mem_u8(tile_num_addr)
     }
@@ -193,6 +194,12 @@ impl Ppu {
             match self.mode {
                 PpuMode::OAMScan => {
                     if self.current_scanline_cycles >= 80 {
+                        // Initialize for drawing pixels
+                        let scx = self.read_mem_u8(LCDRegister::Scx.into());
+                        self.fetcher_x = scx >> 3;
+                        self.pixels_to_discard = scx & 7;
+                        self.background_fifo.clear();
+                        self.fetcher_mode = FetcherMode::GetTile;
                         self.mode = PpuMode::DrawingPixels;
                     }
                 }
@@ -221,9 +228,15 @@ impl Ppu {
 
                     if self.background_fifo.len() > 0 {
                         let color = self.background_fifo.pop();
-                        let ly = self.read_mem_u8(LCDRegister::Ly.into());
-                        self.set_pixel(self.scanline_x as usize, ly as usize, color);
-                        self.scanline_x += 1;
+                        
+                        // Handle fine scrolling by discarding pixels
+                        if self.pixels_to_discard > 0 {
+                            self.pixels_to_discard -= 1;
+                        } else {
+                            let ly = self.read_mem_u8(LCDRegister::Ly.into());
+                            self.set_pixel(self.scanline_x as usize, ly as usize, color);
+                            self.scanline_x += 1;
+                        }
                     }
 
                     if self.scanline_x >= 160 {
@@ -234,7 +247,10 @@ impl Ppu {
                     if self.current_scanline_cycles >= CYCLES_PER_SCANLINE {
                         let scx = self.read_mem_u8(LCDRegister::Scx.into());
                         self.scanline_x = 0;
-                        self.fetcher_x = (scx & 7) >> 3;
+                        self.fetcher_x = scx >> 3;  // Start fetching from the correct tile
+                        self.pixels_to_discard = scx & 7;  // Fine scroll offset
+                        self.background_fifo.clear();  // Clear FIFO for new scanline
+                        self.fetcher_mode = FetcherMode::GetTile;  // Reset fetcher
                         self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::Ly.into());
                         ly = ly.wrapping_add(1);
