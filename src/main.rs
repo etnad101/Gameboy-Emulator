@@ -12,10 +12,11 @@
 */
 
 #![warn(clippy::all)]
+#![warn(clippy::pedantic)]
 //#![deny(clippy::unwrap_used)]
 //#![deny(clippy::panic)]
-//#![warn(clippy::cargo)]
-//#![warn(clippy::restriction)]
+// #![warn(clippy::cargo)]
+// #![warn(clippy::restriction)]
 
 mod emulator;
 mod gui;
@@ -24,8 +25,8 @@ mod utils;
 use crate::gui::EmulatorGui;
 use std::error::Error;
 
-use emulator::{cartridge::Cartridge, Emulator, DMGBus};
 use crate::emulator::debug::DebugFlag;
+use emulator::{cartridge::Cartridge, DMGBus, Emulator};
 
 type Color = u32;
 type Palette = (u32, u32, u32, u32);

@@ -10,7 +10,7 @@ use crate::{
     Palette,
 };
 
-use super::{cpu::registers::Registers, memory::{Bus, DMGBus}, LCDRegister};
+use super::{memory::Bus, LCDRegister};
 
 const CALL_LOG_HISTORY_LENGTH: usize = 100;
 
@@ -27,8 +27,8 @@ impl Tile {
             let lo_byte = tile_data[i];
             let hi_byte = tile_data[i + 1];
             for bit in (0..8).rev() {
-                let lo = ((lo_byte & (1 << bit)) >> bit) as u16;
-                let hi = ((hi_byte & (1 << bit)) >> bit) as u16;
+                let lo = u16::from((lo_byte & (1 << bit)) >> bit);
+                let hi = u16::from((hi_byte & (1 << bit)) >> bit);
                 let data: u8 = ((hi << 1) | lo) as u8;
                 tile[ptr] = data;
                 ptr += 1;
@@ -105,7 +105,7 @@ impl<B: Bus> DebugCtx<B> {
     }
 
     pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
-        self.push_call_log_helper(format!("pc:{:#06x} -> '{}' ({:#04x})", pc, asm, code));
+        self.push_call_log_helper(format!("pc:{pc:#06x} -> '{asm}' ({code:#04x})"));
     }
 
     pub fn push_note(&mut self, note: String) {
@@ -169,15 +169,15 @@ impl<B: Bus> DebugCtx<B> {
             }
 
             if i % 32 == 0 {
-                mem_log.push_str(&format!("\n|{:#06x}| ", i));
+                mem_log.push_str(&format!("\n|{i:#06x}| "));
             } else if i % 16 == 0 {
-                mem_log.push_str(&format!("|{:#06x}| ", i));
+                mem_log.push_str(&format!("|{i:#06x}| "));
             } else if i % 8 == 0 {
                 mem_log.push(' ');
             }
 
             let byte: u8 = self.memory.borrow().read_u8(i);
-            mem_log.push_str(&format!("{:02x} ", byte));
+            mem_log.push_str(&format!("{byte:02x} "));
         }
         Some(mem_log)
     }
@@ -185,10 +185,10 @@ impl<B: Bus> DebugCtx<B> {
     pub fn dump_logs(&mut self) {
         let mut log = String::from("BEGIN CRASH LOG\n");
         if let Some(l) = self.create_call_log_dump() {
-            log.push_str(&l)
+            log.push_str(&l);
         }
         if let Some(l) = self.create_mem_dump() {
-            log.push_str(&l)
+            log.push_str(&l);
         }
 
         let dt = Local::now();
@@ -198,7 +198,7 @@ impl<B: Bus> DebugCtx<B> {
         let log_name =
             "crash_log".to_string() + &now.replace(' ', "_").replace(':', "-").replace('.', "_");
         if !Path::new("./logs/").exists() {
-            fs::create_dir("./logs").expect("Unable to create log directory")
+            fs::create_dir("./logs").expect("Unable to create log directory");
         };
         let path = "./logs/".to_string() + &log_name;
         fs::File::create(path.clone()).expect("unable to create file");
@@ -264,7 +264,7 @@ impl<B: Bus> DebugCtx<B> {
             let tile_num_base: u16 = if lcdc.get_bit(3) == 0 { 0x9800 } else { 0x9C00 };
             let tile_number_addr = tile_num_base + tile;
             let tile_number = self.memory.borrow().read_u8(tile_number_addr);
-            let tile_data_addr = 0x8000 + (16 * tile_number as u16) as usize;
+            let tile_data_addr = 0x8000 + (16 * u16::from(tile_number)) as usize;
             let tile_data = self
                 .memory
                 .borrow()
@@ -276,8 +276,8 @@ impl<B: Bus> DebugCtx<B> {
                 let lo_byte = tile_data[i];
                 let hi_byte = tile_data[i + 1];
                 for bit in (0..8).rev() {
-                    let lo = ((lo_byte & (1 << bit)) >> bit) as u16;
-                    let hi = ((hi_byte & (1 << bit)) >> bit) as u16;
+                    let lo = u16::from((lo_byte & (1 << bit)) >> bit);
+                    let hi = u16::from((hi_byte & (1 << bit)) >> bit);
                     let color_data: u8 = ((hi << 1) | lo) as u8;
                     let color: u32 = match color_data {
                         0 => self.palette.0,

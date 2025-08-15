@@ -1,9 +1,6 @@
 use std::{fs, ops::Range};
 
-use super::{
-    cartridge::{Cartridge, MBC},
-    errors::MemError,
-};
+use super::cartridge::Cartridge;
 
 pub trait Bus {
     fn read_u8(&self, addr: u16) -> u8;
@@ -105,13 +102,13 @@ impl Bus for DMGBus {
             0xFEA0..=0xFEFF => (), // not useable range, refer to pandocs
             0xFF00..=0xFF7F => self.io_registers[addr as usize - 0xFF00] = value,
             0xFF80..=0xFFFF => self.hram[addr as usize - 0xFF80] = value,
-            _ => panic!("Tried writing to illegal address {:#06x}", addr),
+            _ => panic!("Tried writing to illegal address {addr:#06x}"),
         }
     }
 
     fn read_u16(&self, addr: u16) -> u16 {
-        let lo = self.read_u8(addr) as u16;
-        let hi = self.read_u8(addr + 1) as u16;
+        let lo = u16::from(self.read_u8(addr));
+        let hi = u16::from(self.read_u8(addr + 1));
         (hi << 8) | lo
     }
 
@@ -152,8 +149,8 @@ impl Bus for RawBus {
     }
 
     fn read_u16(&self, addr: u16) -> u16 {
-        let lo = self.ram[addr as usize] as u16;
-        let hi = self.ram[addr as usize + 1] as u16;
+        let lo = u16::from(self.ram[addr as usize]);
+        let hi = u16::from(self.ram[addr as usize + 1]);
         (hi << 8) | lo
     }
 

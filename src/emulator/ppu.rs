@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use super::memory::{Bus, DMGBus};
+use super::memory::Bus;
 use super::{debug::DebugCtx, LCDRegister};
 use crate::utils::frame_buffer::FrameBuffer;
 use crate::Palette;
@@ -121,13 +121,9 @@ impl<B: Bus> Ppu<B> {
     }
 
     fn set_pixel(&mut self, x: usize, y: usize, color: u32) {
-        if x > SCREEN_WIDTH {
-            panic!("ERROR::PPU attempting to draw outside of buffer (width)")
-        }
+        assert!((x <= SCREEN_WIDTH), "ERROR::PPU attempting to draw outside of buffer (width)");
 
-        if y > SCREEN_HEIGHT {
-            panic!("ERROR::PPU attempting to draw outside of buffer (height)")
-        }
+        assert!((y <= SCREEN_HEIGHT), "ERROR::PPU attempting to draw outside of buffer (height)");
 
         let index = (y * SCREEN_WIDTH) + x;
         self.frame.write(index, color);
@@ -135,14 +131,14 @@ impl<B: Bus> Ppu<B> {
 
     fn get_tile_number(&mut self) -> u8 {
         let lcdc = self.read_mem_u8(LCDRegister::Lcdc.into());
-        let ly = self.read_mem_u8(LCDRegister::Ly.into()) as u16;
-        let scy = self.read_mem_u8(LCDRegister::Scy.into()) as u16;
+        let ly = u16::from(self.read_mem_u8(LCDRegister::Ly.into()));
+        let scy = u16::from(self.read_mem_u8(LCDRegister::Scy.into()));
 
-        let tile_map_base = ((lcdc >> 3) & 1) as u16;
+        let tile_map_base = u16::from((lcdc >> 3) & 1);
         let tile_num_addr = 0x9800
             | (tile_map_base << 10)
             | ((((ly + scy) & 0xFF) >> 3) << 5)
-            | (self.fetcher_x as u16 & 0x1F); 
+            | (u16::from(self.fetcher_x) & 0x1F); 
 
         self.read_mem_u8(tile_num_addr)
     }
@@ -157,7 +153,7 @@ impl<B: Bus> Ppu<B> {
             0
         };
         self.tile_addr =
-            0x8000 | (bit_12 << 12) | ((self.tile_number as u16) << 4) | (((ly + scy) % 8) << 1);
+            0x8000 | (bit_12 << 12) | (u16::from(self.tile_number) << 4) | (((ly + scy) % 8) << 1);
         self.read_mem_u8(self.tile_addr)
     }
 
@@ -168,8 +164,8 @@ impl<B: Bus> Ppu<B> {
     fn push_to_fifo(&mut self) {
         for bit in (0..8).rev() {
             let mask = 1 << bit;
-            let lo = ((self.lo_byte & mask) >> bit) as u16;
-            let hi = ((self.hi_byte & mask) >> bit) as u16;
+            let lo = u16::from((self.lo_byte & mask) >> bit);
+            let hi = u16::from((self.hi_byte & mask) >> bit);
             let data: u8 = ((hi << 1) | lo) as u8;
             let color: u32 = match data {
                 0 => self.palette.0,
@@ -215,11 +211,11 @@ impl<B: Bus> Ppu<B> {
                             }
                             FetcherMode::TileDataLow => {
                                 self.lo_byte = self.get_tile_data_low();
-                                self.fetcher_mode = FetcherMode::TileDataHigh
+                                self.fetcher_mode = FetcherMode::TileDataHigh;
                             }
                             FetcherMode::TileDataHigh => {
                                 self.hi_byte = self.get_tile_data_high();
-                                self.fetcher_mode = FetcherMode::Push
+                                self.fetcher_mode = FetcherMode::Push;
                             }
                             FetcherMode::Push => {
                                 self.push_to_fifo();
@@ -259,9 +255,9 @@ impl<B: Bus> Ppu<B> {
                         ly = ly.wrapping_add(1);
                         self.write_mem_u8(LCDRegister::Ly.into(), ly);
                         if ly >= 144 {
-                            self.mode = PpuMode::VBlank
+                            self.mode = PpuMode::VBlank;
                         } else {
-                            self.mode = PpuMode::OAMScan
+                            self.mode = PpuMode::OAMScan;
                         }
                     }
                 }
@@ -273,7 +269,7 @@ impl<B: Bus> Ppu<B> {
                         self.write_mem_u8(LCDRegister::Ly.into(), ly);
                         if ly >= 153 {
                             self.write_mem_u8(LCDRegister::Ly.into(), 0);
-                            self.mode = PpuMode::OAMScan
+                            self.mode = PpuMode::OAMScan;
                         }
                     }
                 }

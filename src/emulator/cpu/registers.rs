@@ -28,7 +28,7 @@ impl Registers {
     }
 
     pub fn af(&self) -> u16 {
-        ((self.a as u16) << 8) | (self.f as u16)
+        (u16::from(self.a) << 8) | u16::from(self.f)
     }
 
     pub fn set_af(&mut self, value: u16) {
@@ -37,7 +37,7 @@ impl Registers {
     }
 
     pub fn bc(&self) -> u16 {
-        ((self.b as u16) << 8) | (self.c as u16)
+        (u16::from(self.b) << 8) | u16::from(self.c)
     }
 
     pub fn set_bc(&mut self, value: u16) {
@@ -46,7 +46,7 @@ impl Registers {
     }
 
     pub fn de(&self) -> u16 {
-        ((self.d as u16) << 8) | (self.e as u16)
+        (u16::from(self.d) << 8) | u16::from(self.e)
     }
 
     pub fn set_de(&mut self, value: u16) {
@@ -55,7 +55,7 @@ impl Registers {
     }
 
     pub fn hl(&self) -> u16 {
-        ((self.h as u16) << 8) | (self.l as u16)
+        (u16::from(self.h) << 8) | u16::from(self.l)
     }
 
     pub fn set_hl(&mut self, value: u16) {
@@ -76,11 +76,11 @@ impl Registers {
     }
 
     pub fn set_n_flag(&mut self) {
-        self.f.set_bit(6)
+        self.f.set_bit(6);
     }
 
     pub fn clear_n_flag(&mut self) {
-        self.f.clear_bit(6)
+        self.f.clear_bit(6);
     }
 
     pub fn get_n_flag(&self) -> u8 {
@@ -88,11 +88,11 @@ impl Registers {
     }
 
     pub fn set_h_flag(&mut self) {
-        self.f.set_bit(5)
+        self.f.set_bit(5);
     }
 
     pub fn clear_h_flag(&mut self) {
-        self.f.clear_bit(5)
+        self.f.clear_bit(5);
     }
 
     pub fn get_h_flag(&self) -> u8 {
@@ -104,7 +104,7 @@ impl Registers {
     }
 
     pub fn clear_c_flag(&mut self) {
-        self.f.clear_bit(4)
+        self.f.clear_bit(4);
     }
 
     pub fn get_c_flag(&self) -> u8 {

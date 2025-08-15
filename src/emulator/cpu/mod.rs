@@ -7,7 +7,7 @@ use crate::{
             opcodes::{AddressingMode, Opcode, Register},
             registers::Registers,
         },
-        memory::{Bus,DMGBus},
+        memory::Bus,
     },
     utils::bit_ops::BitOps,
 };
@@ -116,7 +116,7 @@ impl<B: Bus> Cpu<B> {
             }
             AddressingMode::AddressHRAM => {
                 let hi = 0xFF00;
-                let lo: u16 = self.read_mem_u8(self.pc.wrapping_add(1)) as u16;
+                let lo: u16 = u16::from(self.read_mem_u8(self.pc.wrapping_add(1)));
                 let addr = hi + lo;
                 DataType::Address(addr)
             }
@@ -129,7 +129,7 @@ impl<B: Bus> Cpu<B> {
             AddressingMode::AddressU16 => {
                 DataType::Address(self.read_mem_u16(self.pc.wrapping_add(1)))
             }
-            AddressingMode::IoAddressOffset => DataType::Address(0xFF00 | (self.reg.c as u16)),
+            AddressingMode::IoAddressOffset => DataType::Address(0xFF00 | u16::from(self.reg.c)),
             AddressingMode::None => DataType::None,
         }
     }
@@ -148,7 +148,7 @@ impl<B: Bus> Cpu<B> {
         self.sp += 1;
         let hi = self.read_mem_u8(self.sp);
         self.sp += 1;
-        ((hi as u16) << 8) | lo as u16
+        (u16::from(hi) << 8) | u16::from(lo)
     }
 
     // Opcode methods
@@ -271,17 +271,17 @@ impl<B: Bus> Cpu<B> {
         };
 
         if sum == 0 {
-            self.reg.set_z_flag()
+            self.reg.set_z_flag();
         } else {
-            self.reg.clear_z_flag()
+            self.reg.clear_z_flag();
         }
 
         self.reg.clear_n_flag();
 
         if half_carry {
-            self.reg.set_h_flag()
+            self.reg.set_h_flag();
         } else {
-            self.reg.clear_h_flag()
+            self.reg.clear_h_flag();
         }
     }
 
@@ -327,17 +327,17 @@ impl<B: Bus> Cpu<B> {
         }
 
         if diff == 0 {
-            self.reg.set_z_flag()
+            self.reg.set_z_flag();
         } else {
-            self.reg.clear_z_flag()
+            self.reg.clear_z_flag();
         }
 
         self.reg.set_n_flag();
 
         if half_borrow {
-            self.reg.set_h_flag()
+            self.reg.set_h_flag();
         } else {
-            self.reg.clear_h_flag()
+            self.reg.clear_h_flag();
         }
     }
 
@@ -372,25 +372,25 @@ impl<B: Bus> Cpu<B> {
         let extra_cycles: usize = match condition {
             Some(JumpCondition::Z) => {
                 if self.reg.get_z_flag() != 0 {
-                    jump = true
+                    jump = true;
                 };
                 4
             }
             Some(JumpCondition::NZ) => {
                 if self.reg.get_z_flag() == 0 {
-                    jump = true
+                    jump = true;
                 };
                 4
             }
             Some(JumpCondition::C) => {
                 if self.reg.get_c_flag() != 0 {
-                    jump = true
+                    jump = true;
                 };
                 4
             }
             Some(JumpCondition::NC) => {
                 if self.reg.get_c_flag() == 0 {
-                    jump = true
+                    jump = true;
                 };
                 4
             }
@@ -401,7 +401,7 @@ impl<B: Bus> Cpu<B> {
         };
 
         if jump {
-            let res: i16 = (self.pc as i16).wrapping_add(offset as i16);
+            let res: i16 = (self.pc as i16).wrapping_add(i16::from(offset));
             self.pc = res as u16;
         }
 
@@ -643,9 +643,9 @@ impl<B: Bus> Cpu<B> {
         };
 
         if update_z && (new_val == 0) {
-            self.reg.set_z_flag()
+            self.reg.set_z_flag();
         } else {
-            self.reg.clear_z_flag()
+            self.reg.clear_z_flag();
         }
 
         self.reg.clear_n_flag();
@@ -790,7 +790,7 @@ impl<B: Bus> Cpu<B> {
 
     fn add_sp_e8(&mut self, rhs: &AddressingMode) {
         let value = match self.get_data(rhs) {
-            DataType::ValueI8(val) => val as i16,
+            DataType::ValueI8(val) => i16::from(val),
             _ => panic!("Should only have an i8 here"),
         };
 
@@ -829,7 +829,7 @@ impl<B: Bus> Cpu<B> {
 
     fn ld_hl_sp_e8(&mut self, rhs: &AddressingMode) {
         let value = match self.get_data(rhs) {
-            DataType::ValueI8(val) => val as i16,
+            DataType::ValueI8(val) => i16::from(val),
             _ => panic!("Should only have an i8 here"),
         };
 
@@ -900,7 +900,7 @@ impl<B: Bus> Cpu<B> {
         }
 
         if store_result {
-            self.reg.a = diff
+            self.reg.a = diff;
         }
     }
 
@@ -937,7 +937,7 @@ impl<B: Bus> Cpu<B> {
             self.reg.clear_c_flag();
         }
 
-        self.reg.a = diff
+        self.reg.a = diff;
     }
 
     fn and(&mut self, rhs: &AddressingMode) {
@@ -975,9 +975,9 @@ impl<B: Bus> Cpu<B> {
         self.reg.a = res;
 
         if res == 0 {
-            self.reg.set_z_flag()
+            self.reg.set_z_flag();
         } else {
-            self.reg.clear_z_flag()
+            self.reg.clear_z_flag();
         }
 
         self.reg.clear_n_flag();
@@ -996,9 +996,9 @@ impl<B: Bus> Cpu<B> {
         self.reg.a = res;
 
         if res == 0 {
-            self.reg.set_z_flag()
+            self.reg.set_z_flag();
         } else {
-            self.reg.clear_z_flag()
+            self.reg.clear_z_flag();
         }
 
         self.reg.clear_n_flag();
@@ -1069,7 +1069,7 @@ impl<B: Bus> Cpu<B> {
             // after an addition, adjust if (half-)carry occurred or if result is out of bounds
             if (self.reg.get_c_flag() == 1) || self.reg.a > 0x99 {
                 self.reg.a = self.reg.a.wrapping_add(0x60);
-                self.reg.set_c_flag()
+                self.reg.set_c_flag();
             }
             if self.reg.get_h_flag() == 1 || (self.reg.a & 0x0f) > 0x09 {
                 self.reg.a = self.reg.a.wrapping_add(0x6);
@@ -1145,7 +1145,7 @@ impl<B: Bus> Cpu<B> {
             };
             (
                 opcode.asm.to_owned(),
-                opcode.bytes as u16,
+                u16::from(opcode.bytes),
                 opcode.t_cycles as usize,
                 opcode.lhs.clone(),
                 opcode.rhs.clone(),
@@ -1351,31 +1351,31 @@ impl<B: Bus> Cpu<B> {
                 }
                 0xcf => {
                     skip_pc_increase = true;
-                    self.reset_vec(0x0008)
+                    self.reset_vec(0x0008);
                 }
                 0xd7 => {
                     skip_pc_increase = true;
-                    self.reset_vec(0x0010)
+                    self.reset_vec(0x0010);
                 }
                 0xdf => {
                     skip_pc_increase = true;
-                    self.reset_vec(0x0018)
+                    self.reset_vec(0x0018);
                 }
                 0xe7 => {
                     skip_pc_increase = true;
-                    self.reset_vec(0x0020)
+                    self.reset_vec(0x0020);
                 }
                 0xef => {
                     skip_pc_increase = true;
-                    self.reset_vec(0x0028)
+                    self.reset_vec(0x0028);
                 }
                 0xf7 => {
                     skip_pc_increase = true;
-                    self.reset_vec(0x0030)
+                    self.reset_vec(0x0030);
                 }
                 0xff => {
                     skip_pc_increase = true;
-                    self.reset_vec(0x0038)
+                    self.reset_vec(0x0038);
                 }
                 0xe8 => self.add_sp_e8(&rhs),
                 0xf8 => self.ld_hl_sp_e8(&rhs),

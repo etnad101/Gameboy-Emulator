@@ -85,7 +85,7 @@ pub struct Emulator<B: Bus> {
 }
 
 impl Emulator<DMGBus> {
-    /// Creates a new emulator instance with a DMGBus
+    /// Creates a new emulator instance with a `DMGBus`
     pub fn new() -> Self {
         let memory_bus = DMGBus::new().unwrap();
         let memory_bus = Rc::new(RefCell::new(memory_bus));
@@ -195,7 +195,7 @@ impl<B: Bus> Emulator<B> {
         for mem_state in test.initial.ram.iter().cloned() {
             let addr = mem_state[0];
             let value = mem_state[1] as u8;
-            self.memory.borrow_mut().write_u8(addr, value)
+            self.memory.borrow_mut().write_u8(addr, value);
         }
     }
 
@@ -219,8 +219,7 @@ impl<B: Bus> Emulator<B> {
 
             if mem_value != correct_value && addr != 0xff04 {
                 print!(
-                    "addr: {:#06x}, val: {:#04x}, expected: {:#04x}",
-                    addr, mem_value, correct_value
+                    "addr: {addr:#06x}, val: {mem_value:#04x}, expected: {correct_value:#04x}"
                 );
                 return false;
             }
@@ -241,8 +240,7 @@ impl<B: Bus> Emulator<B> {
                 test.initial.pc
             );
             println!(
-                "  Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
-                a, b, c, d, e, h, l, f, sp, pc
+                "  Result: a: {a:#04x}, b: {b:#04x}, c: {c:#04x}, d: {d:#04x}, e: {e:#04x}, h: {h:#04x}, l: {l:#04x}, f: {f:#010b}, sp: {sp:#06x}, pc: {pc:#06x}"
             );
             println!(
                 "Expected: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
@@ -277,7 +275,7 @@ impl<B: Bus> Emulator<B> {
             let mut current_test = 0;
             let mut passed = 0;
             println!("----------");
-            println!("Testing {}", name);
+            println!("Testing {name}");
             'inner: for test in test_data {
                 current_test += 1;
                 std::io::stdout().flush().unwrap();
@@ -285,10 +283,10 @@ impl<B: Bus> Emulator<B> {
                 match self.cpu.execute_next_opcode() {
                     Ok(_) => (),
                     Err(CpuError::OpcodeError(e)) => {
-                        println!("{}", e);
+                        println!("{e}");
                     }
                     Err(e) => {
-                        println!("{}", e);
+                        println!("{e}");
                         break 'inner;
                     }
                 }
@@ -297,11 +295,11 @@ impl<B: Bus> Emulator<B> {
                     passed += 1;
                 } else {
                     all_passed = false;
-                    println!(" -> test {}", current_test);
+                    println!(" -> test {current_test}");
                     std::io::stdout().flush()?;
                 }
             }
-            println!("\n{}/{} tests passed\n", passed, total_tests);
+            println!("\n{passed}/{total_tests} tests passed\n");
         }
         Ok(all_passed)
     }

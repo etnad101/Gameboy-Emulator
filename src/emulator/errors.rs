@@ -30,14 +30,12 @@ impl fmt::Display for CpuError {
                 if prefixed.to_owned() {
                     write!(
                         f,
-                        "CPU_ERROR: Prefixed Opcode {:#04x} not implemented yet",
-                        code
+                        "CPU_ERROR: Prefixed Opcode {code:#04x} not implemented yet"
                     )
                 } else {
                     write!(
                         f,
-                        "CPU_ERROR: Normal Opcode {:#04x} not implemented yet",
-                        code
+                        "CPU_ERROR: Normal Opcode {code:#04x} not implemented yet"
                     )
                 }
             }
@@ -45,18 +43,16 @@ impl fmt::Display for CpuError {
                 if prefixed.to_owned() {
                     write!(
                         f,
-                        "CPU_ERROR: Prefixed Opcode {:#04x} not found in opcode map",
-                        code
+                        "CPU_ERROR: Prefixed Opcode {code:#04x} not found in opcode map"
                     )
                 } else {
                     write!(
                         f,
-                        "CPU_ERROR: Normal Opcode {:#04x} not found in opcode map",
-                        code
+                        "CPU_ERROR: Normal Opcode {code:#04x} not found in opcode map"
                     )
                 }
             }
-            CpuError::OpcodeError(msg) => write!(f, "CPU_ERROR: {}", msg),
+            CpuError::OpcodeError(msg) => write!(f, "CPU_ERROR: {msg}"),
             CpuError::IntentionalCrash => write!(f, "CPU_ERROR: Intentional Crash"),
         }
     }

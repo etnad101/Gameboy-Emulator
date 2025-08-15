@@ -31,7 +31,7 @@ pub struct Cartridge {
 
 impl Cartridge {
     pub fn from(rom_path: &str) -> Result<Self, Error> {
-        println!("Looking for rom at '{}'", rom_path);
+        println!("Looking for rom at '{rom_path}'");
         let raw_file = fs::read(rom_path)?;
         let cgb_flag = raw_file[0x143];
         let (gb_compatible, title_bytes) = match cgb_flag {
@@ -54,7 +54,7 @@ impl Cartridge {
 
         let title = String::from_utf8(title_bytes).unwrap();
 
-        println!("Found Rom: {}", title);
+        println!("Found Rom: {title}");
 
         let (mbc, ram, battery, timer) = match raw_file[0x147] {
             0x00 => (None, false, false, false),
@@ -85,7 +85,7 @@ impl Cartridge {
         let rom_banks = match raw_file[0x148] {
             0x00..=0x08 => {
                 let base: usize = 2;
-                base.pow(raw_file[0x148] as u32)
+                base.pow(u32::from(raw_file[0x148]))
             }
             0x52 => 72,
             0x53 => 80,

@@ -10,11 +10,11 @@ impl BitOps<u8> for u8 {
     }
 
     fn set_bit(&mut self, bit: u8) {
-        *self |= 1 << bit
+        *self |= 1 << bit;
     }
 
     fn clear_bit(&mut self, bit: u8) {
-        *self &= !(1 << bit)
+        *self &= !(1 << bit);
     }
 }
 
@@ -24,10 +24,10 @@ impl BitOps<i8> for i8 {
     }
 
     fn set_bit(&mut self, bit: i8) {
-        *self |= 1 << bit
+        *self |= 1 << bit;
     }
 
     fn clear_bit(&mut self, bit: i8) {
-        *self &= !(1 << bit)
+        *self &= !(1 << bit);
     }
 }
