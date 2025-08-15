@@ -12,11 +12,11 @@
 */
 
 #![warn(clippy::all)]
-#![warn(clippy::pedantic)]
+//#![warn(clippy::pedantic)]
 //#![deny(clippy::unwrap_used)]
 //#![deny(clippy::panic)]
-// #![warn(clippy::cargo)]
-// #![warn(clippy::restriction)]
+//#![warn(clippy::cargo)]
+//#![warn(clippy::restriction)]
 
 mod emulator;
 mod gui;

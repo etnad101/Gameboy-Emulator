@@ -1194,7 +1194,6 @@ impl<B: Bus> Cpu<B> {
                 0xe8..=0xef => self.set_bit(5, &rhs),
                 0xf0..=0xf7 => self.set_bit(6, &rhs),
                 0xf8..=0xff => self.set_bit(7, &rhs),
-                _ => unreachable!(),
             };
         } else {
             match code {
@@ -1397,7 +1396,7 @@ impl<B: Bus> Cpu<B> {
         }
 
         let interrupt_enable = self.memory.borrow().read_u8(0xFFFF); // Interrupt enable address
-        let mut interrupt_flag= self.memory.borrow().read_u8(0xFF0F); // Interrupt flag address
+        let mut interrupt_flag = self.memory.borrow().read_u8(0xFF0F); // Interrupt flag address
 
         let triggered_interrupts = interrupt_enable & interrupt_flag;
 
@@ -1420,7 +1419,9 @@ impl<B: Bus> Cpu<B> {
                     4 => 0x60,
                     _ => unreachable!(),
                 };
-                self.debug_ctx.borrow_mut().push_note(format!("triggered interrupt: {:4x}", self.pc));
+                self.debug_ctx
+                    .borrow_mut()
+                    .push_note(format!("triggered interrupt: {:4x}", self.pc));
                 self.debug_ctx.borrow_mut().dump_logs();
                 return Some(20);
             }

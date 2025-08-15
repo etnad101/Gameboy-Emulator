@@ -136,7 +136,9 @@ pub struct RawBus {
 
 impl RawBus {
     pub fn new() -> Self {
-        Self { ram: vec![0; 0x10000] }
+        Self {
+            ram: vec![0; 0x10000],
+        }
     }
 }
 
@@ -164,4 +166,3 @@ impl Bus for RawBus {
 
     fn load_cartridge(&mut self, cartridge: Cartridge) {}
 }
-

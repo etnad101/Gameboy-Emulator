@@ -19,7 +19,7 @@ use test::TestData;
 use crate::{utils::frame_buffer::FrameBuffer, Palette};
 
 pub use memory::{DMGBus, RawBus};
-pub use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
+pub use ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const CPU_FREQ: usize = 4_194_304; // T-cycles
 const DIV_FREQ: usize = 16_384;
@@ -218,9 +218,7 @@ impl<B: Bus> Emulator<B> {
             let mem_value = self.memory.borrow().read_u8(addr);
 
             if mem_value != correct_value && addr != 0xff04 {
-                print!(
-                    "addr: {addr:#06x}, val: {mem_value:#04x}, expected: {correct_value:#04x}"
-                );
+                print!("addr: {addr:#06x}, val: {mem_value:#04x}, expected: {correct_value:#04x}");
                 return false;
             }
         }

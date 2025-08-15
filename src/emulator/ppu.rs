@@ -4,9 +4,9 @@ use std::rc::Rc;
 
 use super::memory::Bus;
 use super::{debug::DebugCtx, LCDRegister};
+use crate::utils::bit_ops::BitOps;
 use crate::utils::frame_buffer::FrameBuffer;
 use crate::Palette;
-use crate::{utils::bit_ops::BitOps};
 pub const SCREEN_WIDTH: usize = 160;
 pub const SCREEN_HEIGHT: usize = 144;
 
@@ -77,8 +77,8 @@ pub struct Ppu<B: Bus> {
     background_fifo: Fifo,
     object_fifo: Fifo,
     palette: Palette,
-    pixels_to_discard: u8,  // For fine scrolling
-    // mapped registers
+    pixels_to_discard: u8, // For fine scrolling
+                           // mapped registers
 }
 
 impl<B: Bus> Ppu<B> {
@@ -121,9 +121,15 @@ impl<B: Bus> Ppu<B> {
     }
 
     fn set_pixel(&mut self, x: usize, y: usize, color: u32) {
-        assert!((x <= SCREEN_WIDTH), "ERROR::PPU attempting to draw outside of buffer (width)");
+        assert!(
+            (x <= SCREEN_WIDTH),
+            "ERROR::PPU attempting to draw outside of buffer (width)"
+        );
 
-        assert!((y <= SCREEN_HEIGHT), "ERROR::PPU attempting to draw outside of buffer (height)");
+        assert!(
+            (y <= SCREEN_HEIGHT),
+            "ERROR::PPU attempting to draw outside of buffer (height)"
+        );
 
         let index = (y * SCREEN_WIDTH) + x;
         self.frame.write(index, color);
@@ -138,7 +144,7 @@ impl<B: Bus> Ppu<B> {
         let tile_num_addr = 0x9800
             | (tile_map_base << 10)
             | ((((ly + scy) & 0xFF) >> 3) << 5)
-            | (u16::from(self.fetcher_x) & 0x1F); 
+            | (u16::from(self.fetcher_x) & 0x1F);
 
         self.read_mem_u8(tile_num_addr)
     }
@@ -227,7 +233,7 @@ impl<B: Bus> Ppu<B> {
 
                     if self.background_fifo.len() > 0 {
                         let color = self.background_fifo.pop();
-                        
+
                         // Handle fine scrolling by discarding pixels
                         if self.pixels_to_discard > 0 {
                             self.pixels_to_discard -= 1;
@@ -246,10 +252,10 @@ impl<B: Bus> Ppu<B> {
                     if self.current_scanline_cycles >= CYCLES_PER_SCANLINE {
                         let scx = self.read_mem_u8(LCDRegister::Scx.into());
                         self.scanline_x = 0;
-                        self.fetcher_x = scx >> 3;  // Start fetching from the correct tile
-                        self.pixels_to_discard = scx & 7;  // Fine scroll offset
-                        self.background_fifo.clear();  // Clear FIFO for new scanline
-                        self.fetcher_mode = FetcherMode::GetTile;  // Reset fetcher
+                        self.fetcher_x = scx >> 3; // Start fetching from the correct tile
+                        self.pixels_to_discard = scx & 7; // Fine scroll offset
+                        self.background_fifo.clear(); // Clear FIFO for new scanline
+                        self.fetcher_mode = FetcherMode::GetTile; // Reset fetcher
                         self.current_scanline_cycles = 0;
                         let mut ly = self.read_mem_u8(LCDRegister::Ly.into());
                         ly = ly.wrapping_add(1);

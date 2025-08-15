@@ -1,8 +1,8 @@
 use eframe::Frame;
 use egui::{Context, Image, TextureOptions, Vec2};
 
-use crate::emulator::{Emulator, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::emulator::DMGBus;
+use crate::emulator::{Emulator, SCREEN_HEIGHT, SCREEN_WIDTH};
 
 pub struct EmulatorGui {
     emulator: Emulator<DMGBus>,
