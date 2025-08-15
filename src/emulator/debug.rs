@@ -10,9 +10,9 @@ use crate::{
     Palette,
 };
 
-use super::{cpu::registers::Registers, memory::MemoryBus, LCDRegister};
+use super::{cpu::registers::Registers, memory::{Bus, DMGBus}, LCDRegister};
 
-const CALL_LOG_HISTORY_LENGTH: usize = 10;
+const CALL_LOG_HISTORY_LENGTH: usize = 100;
 
 struct Tile {
     data: [u8; 64],
@@ -65,15 +65,15 @@ pub enum DebugFlag {
     DumpCallLog,
 }
 
-pub struct DebugCtx {
+pub struct DebugCtx<B: Bus> {
     flags: Vec<DebugFlag>,
-    memory: Rc<RefCell<MemoryBus>>,
+    memory: Rc<RefCell<B>>,
     palette: Palette,
     call_log: VecDeque<String>,
 }
 
-impl DebugCtx {
-    pub fn new(memory: Rc<RefCell<MemoryBus>>, palette: Palette) -> Self {
+impl<B: Bus> DebugCtx<B> {
+    pub fn new(memory: Rc<RefCell<B>>, palette: Palette) -> Self {
         Self {
             flags: Vec::new(),
             memory,
@@ -90,18 +90,26 @@ impl DebugCtx {
         self.palette = palette;
     }
 
-    pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
+    fn push_call_log_helper(&mut self, msg: String) {
         if !self.flags.contains(&DebugFlag::DumpCallLog)
             && !self.flags.contains(&DebugFlag::ShowRegisters)
         {
             return;
         }
 
-        let msg = format!("pc:{:#06x} -> '{}' ({:#04x})", pc, asm, code);
-        self.call_log.push_front(msg);
+        self.call_log.push_back(msg);
+
         if self.call_log.len() > CALL_LOG_HISTORY_LENGTH {
-            self.call_log.pop_back();
+            self.call_log.pop_front();
         }
+    }
+
+    pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
+        self.push_call_log_helper(format!("pc:{:#06x} -> '{}' ({:#04x})", pc, asm, code));
+    }
+
+    pub fn push_note(&mut self, note: String) {
+        self.push_call_log_helper(note);
     }
 
     pub fn create_call_log_dump(&self) -> Option<String> {
@@ -175,16 +183,12 @@ impl DebugCtx {
     }
 
     pub fn dump_logs(&mut self) {
-        let mut log = String::new();
+        let mut log = String::from("BEGIN CRASH LOG\n");
         if let Some(l) = self.create_call_log_dump() {
             log.push_str(&l)
         }
         if let Some(l) = self.create_mem_dump() {
             log.push_str(&l)
-        }
-
-        if log == String::new() {
-            return;
         }
 
         let dt = Local::now();

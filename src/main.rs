@@ -24,24 +24,22 @@ mod utils;
 use crate::gui::EmulatorGui;
 use std::error::Error;
 
-use emulator::{cartridge::Cartridge, Emulator};
+use emulator::{cartridge::Cartridge, Emulator, DMGBus};
+use crate::emulator::debug::DebugFlag;
 
 type Color = u32;
 type Palette = (u32, u32, u32, u32);
-
-const SCREEN_WIDTH: usize = 160;
-const SCREEN_HEIGHT: usize = 144;
 
 const GREEN_PALETTE: Palette = (0x9BBC0F, 0x8BAC0F, 0x306230, 0x0F380F);
 const GRAY_PALETTE: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
 fn main() -> Result<(), Box<dyn Error>> {
     let dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?;
-    let dr_mario = Cartridge::from("./roms/games/DrMario.gb")?;
+    let dr_mario = Cartridge::from("./roms/games/Dr. Mario (World).gb")?;
 
-    let emulator = Emulator::new();
-
-    emulator.load_rom(dr_mario)?;
+    let emulator = Emulator::<DMGBus>::new()
+        .with_debug_flags(vec![DebugFlag::DumpCallLog, DebugFlag::DumpMem])
+        .with_rom(dr_mario)?;
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_resizable(false),
@@ -65,7 +63,8 @@ mod tests {
 
     #[test]
     fn test_opcodes() {
-        let mut emulator = Emulator::new();
+        use crate::emulator::RawBus;
+        let mut emulator = Emulator::<RawBus>::new();
         assert!(emulator.run_opcode_tests().unwrap());
     }
 }

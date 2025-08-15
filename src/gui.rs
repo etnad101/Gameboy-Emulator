@@ -1,15 +1,16 @@
 use eframe::Frame;
 use egui::{Context, Image, TextureOptions, Vec2};
 
-use crate::{emulator::Emulator, utils::frame_buffer::FrameBuffer, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::{emulator::{Emulator, SCREEN_HEIGHT, SCREEN_WIDTH}, utils::frame_buffer::FrameBuffer};
+use crate::emulator::DMGBus;
 
 pub struct EmulatorGui {
-    emulator: Emulator,
+    emulator: Emulator<DMGBus>,
     frame_buffer: Vec<u8>,
 }
 
 impl EmulatorGui {
-    pub fn new(emulator: Emulator) -> Self {
+    pub fn new(emulator: Emulator<DMGBus>) -> Self {
         Self {
             emulator,
             frame_buffer: vec![],

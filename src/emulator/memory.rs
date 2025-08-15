@@ -5,7 +5,16 @@ use super::{
     errors::MemError,
 };
 
-pub struct MemoryBus {
+pub trait Bus {
+    fn read_u8(&self, addr: u16) -> u8;
+    fn write_u8(&mut self, addr: u16, data: u8);
+    fn read_u16(&self, addr: u16) -> u16;
+    fn clear(&mut self);
+    fn get_range(&self, range: Range<u16>) -> Vec<u8>;
+    fn load_cartridge(&mut self, cartridge: Cartridge);
+}
+
+pub struct DMGBus {
     boot_rom: Vec<u8>,
     vram: Vec<u8>,
     ram: Vec<u8>,
@@ -20,7 +29,7 @@ pub struct MemoryBus {
     current_bank: usize,
 }
 
-impl MemoryBus {
+impl DMGBus {
     pub fn new() -> Result<Self, String> {
         let boot_rom = match fs::read("./DMG_ROM.bin") {
             Ok(rom) => rom,
@@ -32,13 +41,13 @@ impl MemoryBus {
             }
         };
 
-        Ok(MemoryBus {
+        Ok(DMGBus {
             boot_rom,
             vram: vec![0xFF; 0x2000],
             ram: vec![0xFF; 0x2000],
             work_ram: vec![0xFF; 0x2000],
             oam: vec![0xFF; 0x00A0],
-            io_registers: vec![0xFF; 0x0080],
+            io_registers: vec![0xFF; 0x80],
             hram: vec![0xFF; 0x0080],
 
             cartridge: None,
@@ -47,21 +56,10 @@ impl MemoryBus {
             current_bank: 1,
         })
     }
+}
 
-    pub fn load_cartridge(&mut self, cartridge: Cartridge) {
-        self.cartridge = Some(cartridge);
-    }
-
-    pub fn clear(&mut self) {
-        self.vram = vec![0xFF; 0x2000];
-        self.ram = vec![0xFF; 0x2000];
-        self.work_ram = vec![0xFF; 0x2000];
-        self.oam = vec![0xFF; 0x00A0];
-        self.io_registers = vec![0xFF; 0x0080];
-        self.hram = vec![0xFF; 0x0080];
-    }
-
-    pub fn read_u8(&self, addr: u16) -> u8 {
+impl Bus for DMGBus {
+    fn read_u8(&self, addr: u16) -> u8 {
         if self.boot_rom_active {
             if let 0x0000..=0x00FF = addr {
                 return self.boot_rom[addr as usize];
@@ -80,18 +78,16 @@ impl MemoryBus {
             0xFEA0..=0xFEFF => 0x00, // not useable range, refer to pandocs
             0xFF00..=0xFF7F => self.io_registers[addr as usize - 0xFF00],
             0xFF80..=0xFFFF => self.hram[addr as usize - 0xFF80],
+            _ => unreachable!(),
         }
     }
 
-    pub fn read_u16(&self, addr: u16) -> u16 {
-        let lo = self.read_u8(addr) as u16;
-        let hi = self.read_u8(addr + 1) as u16;
-        (hi << 8) | lo
-    }
-
-    pub fn write_u8(&mut self, addr: u16, value: u8) {
+    fn write_u8(&mut self, addr: u16, value: u8) {
         // TODO: implement Echo RAM and range checks
+        // set DIV to 0 if it is written to
         let value = if addr == 0xff04 { 0 } else { value };
+
+        // boot rom writes to here to deactivate itself
         if addr == 0xff50 {
             self.boot_rom_active = false;
         }
@@ -113,7 +109,62 @@ impl MemoryBus {
         }
     }
 
-    pub fn get_range(&self, range: Range<u16>) -> Vec<u8> {
+    fn read_u16(&self, addr: u16) -> u16 {
+        let lo = self.read_u8(addr) as u16;
+        let hi = self.read_u8(addr + 1) as u16;
+        (hi << 8) | lo
+    }
+
+    fn clear(&mut self) {
+        self.vram = vec![0xFF; 0x2000];
+        self.ram = vec![0xFF; 0x2000];
+        self.work_ram = vec![0xFF; 0x2000];
+        self.oam = vec![0xFF; 0x00A0];
+        self.io_registers = vec![0xFF; 0x0080];
+        self.hram = vec![0xFF; 0x0080];
+    }
+
+    fn get_range(&self, range: Range<u16>) -> Vec<u8> {
         range.into_iter().map(|i| self.read_u8(i)).collect()
     }
+
+    fn load_cartridge(&mut self, cartridge: Cartridge) {
+        self.cartridge = Some(cartridge);
+    }
 }
+
+pub struct RawBus {
+    ram: Vec<u8>,
+}
+
+impl RawBus {
+    pub fn new() -> Self {
+        Self { ram: vec![0; 0x10000] }
+    }
+}
+
+impl Bus for RawBus {
+    fn read_u8(&self, addr: u16) -> u8 {
+        self.ram[addr as usize]
+    }
+    fn write_u8(&mut self, addr: u16, value: u8) {
+        self.ram[addr as usize] = value;
+    }
+
+    fn read_u16(&self, addr: u16) -> u16 {
+        let lo = self.ram[addr as usize] as u16;
+        let hi = self.ram[addr as usize + 1] as u16;
+        (hi << 8) | lo
+    }
+
+    fn clear(&mut self) {
+        self.ram.fill(0);
+    }
+
+    fn get_range(&self, range: Range<u16>) -> Vec<u8> {
+        range.into_iter().map(|i| self.read_u8(i)).collect()
+    }
+
+    fn load_cartridge(&mut self, cartridge: Cartridge) {}
+}
+

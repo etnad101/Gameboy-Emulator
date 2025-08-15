@@ -12,11 +12,14 @@ use cartridge::Cartridge;
 use cpu::Cpu;
 use debug::{DebugCtx, DebugFlag};
 use errors::{CpuError, EmulatorError};
-use memory::MemoryBus;
+use memory::Bus;
 use ppu::Ppu;
 use test::TestData;
 
 use crate::{utils::frame_buffer::FrameBuffer, Palette};
+
+pub use memory::{DMGBus, RawBus};
+pub use ppu::{SCREEN_WIDTH, SCREEN_HEIGHT};
 
 const CPU_FREQ: usize = 4_194_304; // T-cycles
 const DIV_FREQ: usize = 16_384;
@@ -71,20 +74,20 @@ impl From<Timer> for u16 {
     }
 }
 
-pub struct Emulator {
-    cpu: Cpu,
-    ppu: Ppu,
-    memory: Rc<RefCell<MemoryBus>>,
-    debug_ctx: Rc<RefCell<DebugCtx>>,
+pub struct Emulator<B: Bus> {
+    cpu: Cpu<B>,
+    ppu: Ppu<B>,
+    memory: Rc<RefCell<B>>,
+    pub debug_ctx: Rc<RefCell<DebugCtx<B>>>,
     timer_cycles: usize,
     frames: usize,
     running: bool,
 }
 
-impl Emulator {
-    /// Creates a new emulator instance
+impl Emulator<DMGBus> {
+    /// Creates a new emulator instance with a DMGBus
     pub fn new() -> Self {
-        let memory_bus = MemoryBus::new().unwrap();
+        let memory_bus = DMGBus::new().unwrap();
         let memory_bus = Rc::new(RefCell::new(memory_bus));
 
         let palette: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
@@ -101,7 +104,29 @@ impl Emulator {
             running: false,
         }
     }
+}
 
+impl Emulator<RawBus> {
+    pub fn new() -> Self {
+        let memory_bus = Rc::new(RefCell::new(RawBus::new()));
+
+        let palette: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
+
+        let debug_ctx = Rc::new(RefCell::new(DebugCtx::new(Rc::clone(&memory_bus), palette)));
+
+        Self {
+            cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx)),
+            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx), palette),
+            memory: Rc::clone(&memory_bus),
+            debug_ctx,
+            timer_cycles: 0,
+            frames: 0,
+            running: false,
+        }
+    }
+}
+
+impl<B: Bus> Emulator<B> {
     pub fn with_debug_flags(self, debug_flags: Vec<DebugFlag>) -> Self {
         self.debug_ctx.borrow_mut().set_flags(debug_flags);
         self
@@ -111,6 +136,11 @@ impl Emulator {
         self.debug_ctx.borrow_mut().set_palette(palette);
         self.ppu.set_palette(palette);
         self
+    }
+
+    pub fn with_rom(self, rom: Cartridge) -> Result<Self, Box<dyn Error>> {
+        self.load_rom(rom)?;
+        Ok(self)
     }
 
     pub fn load_rom(&self, rom: Cartridge) -> Result<(), Box<dyn Error>> {
@@ -128,13 +158,9 @@ impl Emulator {
         if self.timer_cycles >= DIV_UPDATE_FREQ {
             let addr = Timer::Div.into();
             let div = self.memory.borrow().read_u8(addr);
-            self.memory.borrow_mut().write_u8(addr, div);
+            self.memory.borrow_mut().write_u8(addr, div.wrapping_add(1));
             self.timer_cycles = 0;
         }
-    }
-
-    fn do_interrupts(&self) {
-        todo!()
     }
 
     /// Ticks emulator one frame
@@ -148,14 +174,16 @@ impl Emulator {
 
         while cycles_this_frame < MAX_CYCLES_PER_FRAME {
             let cycles = self.cpu.execute_next_opcode()?;
-
             cycles_this_frame += cycles;
 
             self.update_timers(cycles);
-
             self.ppu.update_graphics(cycles);
 
-            // self.do_interrupts();
+            if let Some(interrupt_cycles) = self.cpu.handle_interrupts() {
+                cycles_this_frame += interrupt_cycles;
+                self.update_timers(cycles);
+                self.ppu.update_graphics(cycles);
+            }
         }
 
         Ok(self.ppu.get_frame())

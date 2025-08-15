@@ -7,7 +7,7 @@ use crate::{
             opcodes::{AddressingMode, Opcode, Register},
             registers::Registers,
         },
-        memory::MemoryBus,
+        memory::{Bus,DMGBus},
     },
     utils::bit_ops::BitOps,
 };
@@ -39,19 +39,19 @@ enum DataType {
     None,
 }
 
-pub struct Cpu {
+pub struct Cpu<B: Bus> {
     reg: Registers,
     sp: u16,
     pc: u16,
     ime: bool,
     normal_opcodes: HashMap<u8, Opcode>,
     prefixed_opcodes: HashMap<u8, Opcode>,
-    memory: Rc<RefCell<MemoryBus>>,
-    debugger: Rc<RefCell<DebugCtx>>,
+    memory: Rc<RefCell<B>>,
+    debug_ctx: Rc<RefCell<DebugCtx<B>>>,
 }
 
-impl Cpu {
-    pub fn new(memory: Rc<RefCell<MemoryBus>>, debugger: Rc<RefCell<DebugCtx>>) -> Self {
+impl<B: Bus> Cpu<B> {
+    pub fn new(memory: Rc<RefCell<B>>, debugger: Rc<RefCell<DebugCtx<B>>>) -> Self {
         Self {
             reg: Registers::new(),
             sp: 0,
@@ -60,7 +60,7 @@ impl Cpu {
             normal_opcodes: Opcode::generate_normal_opcode_map(),
             prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
             memory,
-            debugger,
+            debug_ctx: debugger,
         }
     }
 
@@ -71,7 +71,7 @@ impl Cpu {
     }
 
     pub fn crash(&self, error: CpuError) -> CpuError {
-        self.debugger.borrow_mut().dump_logs();
+        self.debug_ctx.borrow_mut().dump_logs();
         eprintln!("{:#06x}", self.pc);
         error
     }
@@ -515,7 +515,8 @@ impl Cpu {
             None => {
                 self.pc = self.pop_stack();
                 if set_ime {
-                    self.write_mem_u8(0xFFFF, 0xFF);
+                    // self.write_mem_u8(0xFFFF, 0xFF);
+                    self.ime = true;
                 }
                 return 0;
             }
@@ -1151,7 +1152,7 @@ impl Cpu {
             )
         };
 
-        self.debugger
+        self.debug_ctx
             .borrow_mut()
             .push_call_log(self.pc, code, &opcode_asm);
 
@@ -1193,6 +1194,7 @@ impl Cpu {
                 0xe8..=0xef => self.set_bit(5, &rhs),
                 0xf0..=0xf7 => self.set_bit(6, &rhs),
                 0xf8..=0xff => self.set_bit(7, &rhs),
+                _ => unreachable!(),
             };
         } else {
             match code {
@@ -1377,8 +1379,8 @@ impl Cpu {
                 }
                 0xe8 => self.add_sp_e8(&rhs),
                 0xf8 => self.ld_hl_sp_e8(&rhs),
-                0xf3 => self.ime = true,
-                0xfb => self.ime = false,
+                0xf3 => self.ime = false,
+                0xfb => self.ime = true,
                 _ => return Err(self.crash(CpuError::OpcodeNotImplemented(code, false))),
             };
         };
@@ -1387,6 +1389,43 @@ impl Cpu {
             self.pc = self.pc.wrapping_add(opcode_bytes);
         }
         Ok(opcode_cycles + extra_cycles)
+    }
+
+    pub fn handle_interrupts(&mut self) -> Option<usize> {
+        if !self.ime {
+            return None;
+        }
+
+        let interrupt_enable = self.memory.borrow().read_u8(0xFFFF); // Interrupt enable address
+        let mut interrupt_flag= self.memory.borrow().read_u8(0xFF0F); // Interrupt flag address
+
+        let triggered_interrupts = interrupt_enable & interrupt_flag;
+
+        if triggered_interrupts == 0 {
+            return None;
+        }
+
+        for bit in 0..5 {
+            if triggered_interrupts.get_bit(bit) != 0 {
+                self.ime = false;
+                interrupt_flag.clear_bit(bit);
+                self.memory.borrow_mut().write_u8(0xFF0F, interrupt_flag);
+
+                self.push_stack(self.pc);
+                self.pc = match bit {
+                    0 => 0x40,
+                    1 => 0x48,
+                    2 => 0x50,
+                    3 => 0x58,
+                    4 => 0x60,
+                    _ => unreachable!(),
+                };
+                self.debug_ctx.borrow_mut().push_note(format!("triggered interrupt: {:4x}", self.pc));
+                self.debug_ctx.borrow_mut().dump_logs();
+                return Some(20);
+            }
+        }
+        None
     }
 
     pub fn load_state(&mut self, state: &State) {

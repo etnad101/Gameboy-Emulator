@@ -2,11 +2,13 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use super::memory::MemoryBus;
+use super::memory::{Bus, DMGBus};
 use super::{debug::DebugCtx, LCDRegister};
 use crate::utils::frame_buffer::FrameBuffer;
 use crate::Palette;
-use crate::{utils::bit_ops::BitOps, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::{utils::bit_ops::BitOps};
+pub const SCREEN_WIDTH: usize = 160;
+pub const SCREEN_HEIGHT: usize = 144;
 
 const CYCLES_PER_SCANLINE: usize = 456;
 
@@ -59,9 +61,9 @@ impl Fifo {
     }
 }
 
-pub struct Ppu {
-    memory: Rc<RefCell<MemoryBus>>,
-    debugger: Rc<RefCell<DebugCtx>>,
+pub struct Ppu<B: Bus> {
+    memory: Rc<RefCell<B>>,
+    debugger: Rc<RefCell<DebugCtx<B>>>,
     frame: FrameBuffer,
     mode: PpuMode,
     current_scanline_cycles: usize,
@@ -76,12 +78,13 @@ pub struct Ppu {
     object_fifo: Fifo,
     palette: Palette,
     pixels_to_discard: u8,  // For fine scrolling
+    // mapped registers
 }
 
-impl Ppu {
+impl<B: Bus> Ppu<B> {
     pub fn new(
-        memory: Rc<RefCell<MemoryBus>>,
-        debugger: Rc<RefCell<DebugCtx>>,
+        memory: Rc<RefCell<B>>,
+        debugger: Rc<RefCell<DebugCtx<B>>>,
         palette: Palette,
     ) -> Self {
         memory.borrow_mut().write_u8(LCDRegister::Ly.into(), 0);
