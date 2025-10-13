@@ -6,7 +6,7 @@ mod memory;
 mod ppu;
 mod test;
 
-use std::{cell::RefCell, error::Error, fs, io::Write, rc::Rc};
+use std::{cell::RefCell, error::Error, fmt::Display, fs, io::Write, rc::Rc};
 
 use cartridge::Cartridge;
 use cpu::Cpu;
@@ -74,6 +74,23 @@ impl From<Timer> for u16 {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum RunType {
+    Paused,
+    Instr,
+    Frame,
+}
+
+impl std::fmt::Display for RunType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            RunType::Paused => write!(f, "Paused"),
+            RunType::Instr => write!(f, "Instr"),
+            RunType::Frame => write!(f, "Frame"),
+        }
+    }
+}
+
 pub struct Emulator<B: Bus> {
     cpu: Cpu<B>,
     ppu: Ppu<B>,
@@ -81,7 +98,8 @@ pub struct Emulator<B: Bus> {
     pub debug_ctx: Rc<RefCell<DebugCtx<B>>>,
     timer_cycles: usize,
     frames: usize,
-    running: bool,
+    running: RunType,
+    cycles_this_frame: usize,
 }
 
 impl Emulator<DMGBus> {
@@ -101,7 +119,8 @@ impl Emulator<DMGBus> {
             debug_ctx,
             timer_cycles: 0,
             frames: 0,
-            running: false,
+            running: RunType::Paused,
+            cycles_this_frame: 0,
         }
     }
 }
@@ -121,7 +140,8 @@ impl Emulator<RawBus> {
             debug_ctx,
             timer_cycles: 0,
             frames: 0,
-            running: false,
+            running: RunType::Paused,
+            cycles_this_frame: 0,
         }
     }
 }
@@ -141,6 +161,22 @@ impl<B: Bus> Emulator<B> {
     pub fn with_rom(self, rom: Cartridge) -> Result<Self, Box<dyn Error>> {
         self.load_rom(rom)?;
         Ok(self)
+    }
+
+    pub fn set_run_type(&mut self, run_type: RunType) {
+        self.running = run_type;
+    }
+
+    pub fn run_type(&self) -> RunType {
+        self.running
+    }
+
+    pub fn pause(&mut self) {
+        self.running = RunType::Paused;
+    }
+
+    pub fn run(&mut self) {
+        self.running = RunType::Frame;
     }
 
     pub fn load_rom(&self, rom: Cartridge) -> Result<(), Box<dyn Error>> {
@@ -163,30 +199,52 @@ impl<B: Bus> Emulator<B> {
         }
     }
 
-    /// Ticks emulator one frame
-    pub fn tick(&mut self) -> Result<&FrameBuffer, Box<dyn Error>> {
+    pub fn update_frame_count(&mut self) {
         self.frames += 1;
         if self.frames >= 60 {
             self.frames = 0;
         }
+    }
 
-        let mut cycles_this_frame = 0;
-
-        while cycles_this_frame < MAX_CYCLES_PER_FRAME {
-            let cycles = self.cpu.execute_next_opcode()?;
-            cycles_this_frame += cycles;
-
-            self.update_timers(cycles);
-            self.ppu.update_graphics(cycles);
-
-            if let Some(interrupt_cycles) = self.cpu.handle_interrupts() {
-                cycles_this_frame += interrupt_cycles;
-                self.update_timers(cycles);
-                self.ppu.update_graphics(cycles);
-            }
+    pub fn tick_to_next_frame(&mut self) -> Result<&FrameBuffer, Box<dyn Error>> {
+        while self.cycles_this_frame < MAX_CYCLES_PER_FRAME {
+            self.tick_instr()?;
         }
+        self.cycles_this_frame = 0;
 
         Ok(self.ppu.get_frame())
+    }
+
+    pub fn tick_instr(&mut self) -> Result<(), Box<dyn Error>> {
+        let cycles = self.cpu.execute_next_opcode()?;
+        self.cycles_this_frame += cycles;
+
+        if self.cycles_this_frame >= MAX_CYCLES_PER_FRAME {
+            self.update_frame_count();
+        }
+
+        self.update_timers(cycles);
+        self.ppu.update_graphics(cycles);
+
+        if let Some(interrupt_cycles) = self.cpu.handle_interrupts() {
+            self.cycles_this_frame += interrupt_cycles;
+            self.update_timers(cycles);
+            self.ppu.update_graphics(cycles);
+        }
+
+        Ok(())
+    }
+
+    pub fn tick(&mut self) -> Result<&FrameBuffer, Box<dyn Error>> {
+        match self.running {
+            RunType::Paused => Ok(self.ppu.get_frame()),
+            RunType::Frame => self.tick_to_next_frame(),
+            RunType::Instr => {
+                // Add logic for ticking only once
+                self.tick_instr()?;
+                Ok(self.ppu.get_frame())
+            }
+        }
     }
 
     fn load_state(&mut self, test: &TestData) {

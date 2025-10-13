@@ -38,9 +38,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?;
     let dr_mario = Cartridge::from("./roms/games/Dr. Mario (World).gb")?;
 
-    let emulator = Emulator::<DMGBus>::new()
+    let mut emulator = Emulator::<DMGBus>::new()
         .with_debug_flags(vec![DebugFlag::DumpCallLog, DebugFlag::DumpMem])
         .with_rom(dr_mario)?;
+
+    emulator.run();
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_resizable(false),

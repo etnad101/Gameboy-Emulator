@@ -10,8 +10,8 @@ inherits = "release"
 debug = true
 
 [dependencies]
-egui = "0.31.1"
-eframe = "0.31.1"
+egui = "0.33.0"
+eframe = "0.33.0"
 rfd = "0.15.3"
 chrono = "0.4.38"
 serde = { version = "1.0.203", features = ["derive"] }
