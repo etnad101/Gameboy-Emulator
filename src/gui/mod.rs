@@ -1,6 +1,6 @@
 mod components;
 use eframe::Frame;
-use egui::Context;
+use egui::{Context, Vec2};
 
 use crate::emulator::cartridge::Cartridge;
 use crate::emulator::DMGBus;
@@ -16,7 +16,7 @@ pub struct EmulatorGui {
 
 impl EmulatorGui {
     pub fn new(emulator: Emulator<DMGBus>) -> Self {
-        let run_type = emulator.run_type().clone();
+        let run_type = emulator.run_type();
         Self {
             emulator,
             emu_screen: EmuScreen::new(SCREEN_WIDTH, SCREEN_HEIGHT),
@@ -55,30 +55,26 @@ impl eframe::App for EmulatorGui {
                         self.emulator.set_run_type(self.run_type);
                         self.emulator.load_rom(cartridge).unwrap();
                     }
-                })
+                });
             });
-            self.emu_screen.ui(ui);
+            ui.separator();
+            ui.horizontal_top(|ui| {
+                self.emu_screen.ui(ui);
+                if self.show_debug_screen {
+                    ui.separator();
+                    ui.label("Debugging screen");
+                    if ui.button("Close").clicked() {
+                        self.show_debug_screen = false;
+                    }
+                    if ui.button("Step").clicked() {
+                        self.emulator.set_run_type(RunType::Instr);
+                        self.emu_screen
+                            .update_texture(&self.emulator.tick().unwrap().rgb(), ctx);
+                    }
+                }
+            });
         });
 
         ctx.request_repaint();
     }
 }
-
-// For deubug menu later
-/*
-let before = self.run_type;
-egui::ComboBox::from_label("Select Run Mode")
-    .selected_text(format!("{}", self.run_type))
-    .show_ui(ui, |ui| {
-        ui.selectable_value(&mut self.run_type, RunType::Paused, "Pause");
-        ui.selectable_value(&mut self.run_type, RunType::Frame, "Run");
-        ui.selectable_value(
-            &mut self.run_type,
-            RunType::Instr,
-            "Instruction Step",
-        );
-    });
-if self.run_type != before {
-    self.emulator.set_run_type(self.run_type);
-}
-*/

@@ -1,7 +1,6 @@
 /*
 * TODO
 * refactor everything to be more modular and represent actual architecture
-* use egui
 * Clean up code
 * Optimize so emulator runs faster
 * Add Memory bank switching(change how mem is stored)
@@ -9,6 +8,7 @@
 * Add interrupts
 * Add RAM bank switching
 * Implement timer
+* Move json tests to debugger
 */
 
 #![warn(clippy::all)]

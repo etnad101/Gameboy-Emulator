@@ -242,6 +242,7 @@ impl<B: Bus> Emulator<B> {
             RunType::Instr => {
                 // Add logic for ticking only once
                 self.tick_instr()?;
+                self.running = RunType::Paused;
                 Ok(self.ppu.get_frame())
             }
         }
