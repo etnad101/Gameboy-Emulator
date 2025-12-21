@@ -1,7 +1,7 @@
 use crate::utils::bit_ops::BitOps;
 
-#[derive(Clone)]
-pub struct Registers {
+#[derive(Clone, Default)]
+pub struct CpuState {
     pub a: u8,
     pub b: u8,
     pub c: u8,
@@ -10,20 +10,15 @@ pub struct Registers {
     pub f: u8,
     pub h: u8,
     pub l: u8,
+    pub sp: u16,
+    pub pc: u16,
+    pub ime: bool,
 }
 
-impl Registers {
+impl CpuState {
     pub fn new() -> Self {
-        let (a, b, c, d, e, f, h, l) = (0, 0, 0, 0, 0, 0, 0, 0);
         Self {
-            a,
-            b,
-            c,
-            d,
-            e,
-            f,
-            h,
-            l,
+            ..Default::default()
         }
     }
 
@@ -69,6 +64,14 @@ impl Registers {
 
     pub fn clear_z_flag(&mut self) {
         self.f.clear_bit(7);
+    }
+
+    pub fn set_z_flag_from_value(&mut self, val: u8) {
+        if val == 0 {
+            self.set_z_flag();
+        } else {
+            self.clear_z_flag();
+        }
     }
 
     pub fn get_z_flag(&self) -> u8 {

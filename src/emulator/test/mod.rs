@@ -1,7 +1,9 @@
+#[cfg(test)]
 use serde::Deserialize;
 
+#[cfg(test)]
 #[derive(Deserialize, Debug)]
-pub struct State {
+pub struct TestJson {
     pub a: u8,
     pub b: u8,
     pub c: u8,
@@ -15,10 +17,11 @@ pub struct State {
     pub ram: Vec<Vec<u16>>,
 }
 
+#[cfg(test)]
 #[derive(Deserialize, Debug)]
-pub struct TestData {
+pub struct TestCase {
     pub name: String,
-    pub initial: State,
+    pub initial: TestJson,
     #[serde(rename = "final")]
-    pub final_name: State,
+    pub final_name: TestJson,
 }

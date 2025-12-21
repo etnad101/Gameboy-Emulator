@@ -6,19 +6,26 @@ mod memory;
 mod ppu;
 mod test;
 
-use std::{cell::RefCell, error::Error, fmt::Display, fs, io::Write, rc::Rc};
+#[cfg(test)]
+use errors::CpuError;
+#[cfg(test)]
+pub use memory::RawBus;
+#[cfg(test)]
+use std::{fs, io::Write};
+#[cfg(test)]
+use test::TestCase;
 
+use std::{cell::RefCell, error::Error, rc::Rc};
+
+use crate::{utils::frame_buffer::FrameBuffer, Palette};
 use cartridge::Cartridge;
 use cpu::Cpu;
 use debug::{DebugCtx, DebugFlag};
-use errors::{CpuError, EmulatorError};
+use errors::EmulatorError;
 use memory::Bus;
 use ppu::Ppu;
-use test::TestData;
 
-use crate::{utils::frame_buffer::FrameBuffer, Palette};
-
-pub use memory::{DMGBus, RawBus};
+pub use memory::DMGBus;
 pub use ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 
 const CPU_FREQ: usize = 4_194_304; // T-cycles
@@ -111,9 +118,10 @@ impl Emulator<DMGBus> {
         let palette: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
         let debug_ctx = Rc::new(RefCell::new(DebugCtx::new(Rc::clone(&memory_bus), palette)));
+        let cpu = Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx));
 
         Self {
-            cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx)),
+            cpu,
             ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx), palette),
             memory: Rc::clone(&memory_bus),
             debug_ctx,
@@ -125,6 +133,7 @@ impl Emulator<DMGBus> {
     }
 }
 
+#[cfg(test)]
 impl Emulator<RawBus> {
     pub fn new() -> Self {
         let memory_bus = Rc::new(RefCell::new(RawBus::new()));
@@ -248,8 +257,23 @@ impl<B: Bus> Emulator<B> {
         }
     }
 
-    fn load_state(&mut self, test: &TestData) {
-        self.cpu.load_state(&test.initial);
+    #[cfg(test)]
+    fn load_test_case(&mut self, test: &TestCase) {
+        use crate::emulator::cpu::state::CpuState;
+        let cpu_state = CpuState {
+            a: test.initial.a,
+            b: test.initial.b,
+            c: test.initial.c,
+            d: test.initial.d,
+            e: test.initial.e,
+            f: test.initial.f,
+            h: test.initial.h,
+            l: test.initial.l,
+            sp: test.initial.sp,
+            pc: test.initial.pc,
+            ime: false,
+        };
+        self.cpu.load_state(cpu_state);
         self.memory.borrow_mut().clear();
         for mem_state in test.initial.ram.iter().cloned() {
             let addr = mem_state[0];
@@ -258,19 +282,19 @@ impl<B: Bus> Emulator<B> {
         }
     }
 
-    fn check_state(&self, test: &TestData) -> bool {
-        let (a, b, c, d, e, f, h, l, sp, pc) = self.cpu.get_state();
-        let equal = a == test.final_name.a
-            && b == test.final_name.b
-            && c == test.final_name.c
-            && d == test.final_name.d
-            && e == test.final_name.e
-            && f == test.final_name.f
-            && h == test.final_name.h
-            && l == test.final_name.l
-            && sp == test.final_name.sp
-            && pc == test.final_name.pc;
-
+    #[cfg(test)]
+    fn check_test_case(&self, test: &TestCase) -> bool {
+        let cpu_state = self.cpu.get_state();
+        let equal = cpu_state.a == test.final_name.a
+            && cpu_state.b == test.final_name.b
+            && cpu_state.c == test.final_name.c
+            && cpu_state.d == test.final_name.d
+            && cpu_state.e == test.final_name.e
+            && cpu_state.f == test.final_name.f
+            && cpu_state.h == test.final_name.h
+            && cpu_state.l == test.final_name.l
+            && cpu_state.sp == test.final_name.sp
+            && cpu_state.pc == test.final_name.pc;
         for mem_state in test.final_name.ram.iter().cloned() {
             let addr = mem_state[0];
             let correct_value = mem_state[1] as u8;
@@ -297,7 +321,7 @@ impl<B: Bus> Emulator<B> {
                 test.initial.pc
             );
             println!(
-                "  Result: a: {a:#04x}, b: {b:#04x}, c: {c:#04x}, d: {d:#04x}, e: {e:#04x}, h: {h:#04x}, l: {l:#04x}, f: {f:#010b}, sp: {sp:#06x}, pc: {pc:#06x}"
+                "  Result: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}", cpu_state.a, cpu_state.b, cpu_state.c, cpu_state.d, cpu_state.e, cpu_state.h, cpu_state.l, cpu_state.f, cpu_state.sp, cpu_state.pc
             );
             println!(
                 "Expected: a: {:#04x}, b: {:#04x}, c: {:#04x}, d: {:#04x}, e: {:#04x}, h: {:#04x}, l: {:#04x}, f: {:#010b}, sp: {:#06x}, pc: {:#06x}",
@@ -316,7 +340,7 @@ impl<B: Bus> Emulator<B> {
         equal
     }
 
-    // Test Code
+    #[cfg(test)]
     pub fn run_opcode_tests(&mut self) -> Result<bool, Box<dyn Error>> {
         let mut all_passed = true;
         let test_dir = fs::read_dir("./tests")?;
@@ -325,7 +349,7 @@ impl<B: Bus> Emulator<B> {
             // TODO: add check to make sure file is valid test
             let data = fs::read_to_string(path).unwrap();
 
-            let test_data: Vec<TestData> = serde_json::from_str(&data).unwrap();
+            let test_data: Vec<TestCase> = serde_json::from_str(&data).unwrap();
             let total_tests = test_data.len();
             let name = test_data[0].name.clone();
 
@@ -336,7 +360,7 @@ impl<B: Bus> Emulator<B> {
             'inner: for test in test_data {
                 current_test += 1;
                 std::io::stdout().flush().unwrap();
-                self.load_state(&test);
+                self.load_test_case(&test);
                 match self.cpu.execute_next_opcode() {
                     Ok(_) => (),
                     Err(CpuError::OpcodeError(e)) => {
@@ -348,7 +372,7 @@ impl<B: Bus> Emulator<B> {
                     }
                 }
 
-                if self.check_state(&test) {
+                if self.check_test_case(&test) {
                     passed += 1;
                 } else {
                     all_passed = false;

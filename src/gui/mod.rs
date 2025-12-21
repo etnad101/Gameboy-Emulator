@@ -1,6 +1,6 @@
 mod components;
 use eframe::Frame;
-use egui::{Context, Vec2};
+use egui::Context;
 
 use crate::emulator::cartridge::Cartridge;
 use crate::emulator::DMGBus;
@@ -31,7 +31,7 @@ impl eframe::App for EmulatorGui {
         self.emu_screen
             .update_texture(&self.emulator.tick().unwrap().rgb(), ctx);
 
-        let response = egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("Menu", |ui| {
                     if ui.button("Run").clicked() {

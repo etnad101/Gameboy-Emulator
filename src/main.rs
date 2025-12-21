@@ -29,17 +29,18 @@ use crate::emulator::debug::DebugFlag;
 use emulator::{cartridge::Cartridge, DMGBus, Emulator};
 
 type Color = u32;
-type Palette = (u32, u32, u32, u32);
+type Palette = (Color, Color, Color, Color);
 
 const GREEN_PALETTE: Palette = (0x9BBC0F, 0x8BAC0F, 0x306230, 0x0F380F);
 const GRAY_PALETTE: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let dmg_acid2_rom = Cartridge::from("./roms/tests/dmg-acid2.gb")?;
+    let dmg_acid2 = Cartridge::from("./roms/tests/dmg-acid2.gb")?;
     let dr_mario = Cartridge::from("./roms/games/Dr. Mario (World).gb")?;
 
     let mut emulator = Emulator::<DMGBus>::new()
         .with_debug_flags(vec![DebugFlag::DumpCallLog, DebugFlag::DumpMem])
+        .with_palette(GREEN_PALETTE)
         .with_rom(dr_mario)?;
 
     emulator.run();

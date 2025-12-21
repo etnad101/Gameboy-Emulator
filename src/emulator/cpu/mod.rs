@@ -1,19 +1,18 @@
 mod opcodes;
-pub(super) mod registers;
+pub(super) mod state;
 
+use super::{debug::DebugCtx, errors::CpuError};
 use crate::{
     emulator::{
         cpu::{
             opcodes::{AddressingMode, Opcode, Register},
-            registers::Registers,
+            state::CpuState,
         },
         memory::Bus,
     },
     utils::bit_ops::BitOps,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
-use super::{debug::DebugCtx, errors::CpuError, test::State};
 enum Direction {
     Left,
     Right,
@@ -40,10 +39,7 @@ enum DataType {
 }
 
 pub struct Cpu<B: Bus> {
-    reg: Registers,
-    sp: u16,
-    pc: u16,
-    ime: bool,
+    state: CpuState,
     normal_opcodes: HashMap<u8, Opcode>,
     prefixed_opcodes: HashMap<u8, Opcode>,
     memory: Rc<RefCell<B>>,
@@ -53,10 +49,7 @@ pub struct Cpu<B: Bus> {
 impl<B: Bus> Cpu<B> {
     pub fn new(memory: Rc<RefCell<B>>, debugger: Rc<RefCell<DebugCtx<B>>>) -> Self {
         Self {
-            reg: Registers::new(),
-            sp: 0,
-            pc: 0,
-            ime: false,
+            state: CpuState::new(),
             normal_opcodes: Opcode::generate_normal_opcode_map(),
             prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
             memory,
@@ -66,13 +59,9 @@ impl<B: Bus> Cpu<B> {
 
     // Debugging methods
 
-    pub fn get_registers(&self) -> Registers {
-        self.reg.clone()
-    }
-
     pub fn crash(&self, error: CpuError) -> CpuError {
         self.debug_ctx.borrow_mut().dump_logs();
-        eprintln!("{:#06x}", self.pc);
+        eprintln!("{:#06x}", self.state.pc);
         error
     }
 
@@ -92,62 +81,86 @@ impl<B: Bus> Cpu<B> {
     fn get_data(&self, addressing_mode: &AddressingMode) -> DataType {
         match addressing_mode {
             AddressingMode::ImmediateRegister(register) => match register {
-                Register::A => DataType::ValueU8(self.reg.a),
-                Register::B => DataType::ValueU8(self.reg.b),
-                Register::C => DataType::ValueU8(self.reg.c),
-                Register::D => DataType::ValueU8(self.reg.d),
-                Register::E => DataType::ValueU8(self.reg.e),
-                Register::H => DataType::ValueU8(self.reg.h),
-                Register::L => DataType::ValueU8(self.reg.l),
-                Register::AF => DataType::ValueU16(self.reg.af()),
-                Register::BC => DataType::ValueU16(self.reg.bc()),
-                Register::DE => DataType::ValueU16(self.reg.de()),
-                Register::HL => DataType::ValueU16(self.reg.hl()),
-                Register::SP => DataType::ValueU16(self.sp),
+                Register::A => DataType::ValueU8(self.state.a),
+                Register::B => DataType::ValueU8(self.state.b),
+                Register::C => DataType::ValueU8(self.state.c),
+                Register::D => DataType::ValueU8(self.state.d),
+                Register::E => DataType::ValueU8(self.state.e),
+                Register::H => DataType::ValueU8(self.state.h),
+                Register::L => DataType::ValueU8(self.state.l),
+                Register::AF => DataType::ValueU16(self.state.af()),
+                Register::BC => DataType::ValueU16(self.state.bc()),
+                Register::DE => DataType::ValueU16(self.state.de()),
+                Register::HL => DataType::ValueU16(self.state.hl()),
+                Register::SP => DataType::ValueU16(self.state.sp),
             },
             AddressingMode::AddressRegister(register) => match register {
-                Register::BC => DataType::Address(self.reg.bc()),
-                Register::DE => DataType::Address(self.reg.de()),
-                Register::HL => DataType::Address(self.reg.hl()),
+                Register::BC => DataType::Address(self.state.bc()),
+                Register::DE => DataType::Address(self.state.de()),
+                Register::HL => DataType::Address(self.state.hl()),
                 _ => todo!("Address_Register not implemented"),
             },
             AddressingMode::ImmediateU8 => {
-                DataType::ValueU8(self.read_mem_u8(self.pc.wrapping_add(1)))
+                DataType::ValueU8(self.read_mem_u8(self.state.pc.wrapping_add(1)))
             }
             AddressingMode::AddressHRAM => {
                 let hi = 0xFF00;
-                let lo: u16 = u16::from(self.read_mem_u8(self.pc.wrapping_add(1)));
+                let lo: u16 = u16::from(self.read_mem_u8(self.state.pc.wrapping_add(1)));
                 let addr = hi + lo;
                 DataType::Address(addr)
             }
             AddressingMode::ImmediateI8 => {
-                DataType::ValueI8(self.read_mem_u8(self.pc.wrapping_add(1)) as i8)
+                DataType::ValueI8(self.read_mem_u8(self.state.pc.wrapping_add(1)) as i8)
             }
             AddressingMode::ImmediateU16 => {
-                DataType::ValueU16(self.read_mem_u16(self.pc.wrapping_add(1)))
+                DataType::ValueU16(self.read_mem_u16(self.state.pc.wrapping_add(1)))
             }
             AddressingMode::AddressU16 => {
-                DataType::Address(self.read_mem_u16(self.pc.wrapping_add(1)))
+                DataType::Address(self.read_mem_u16(self.state.pc.wrapping_add(1)))
             }
-            AddressingMode::IoAddressOffset => DataType::Address(0xFF00 | u16::from(self.reg.c)),
+            AddressingMode::IoAddressOffset => DataType::Address(0xFF00 | u16::from(self.state.c)),
             AddressingMode::None => DataType::None,
+        }
+    }
+
+    fn set_immediate_register_u8(&mut self, reg: &Register, value: u8) {
+        match reg {
+            Register::A => self.state.a = value,
+            Register::B => self.state.b = value,
+            Register::C => self.state.c = value,
+            Register::D => self.state.d = value,
+            Register::E => self.state.e = value,
+            Register::H => self.state.h = value,
+            Register::L => self.state.l = value,
+            _ => unreachable!("Can only set 8 bit registers"),
+        }
+    }
+
+    fn set_immediate_register_u16(&mut self, reg: &Register, value: u16) {
+        match reg {
+            Register::AF => self.state.set_af(value),
+            Register::BC => self.state.set_bc(value),
+            Register::DE => self.state.set_de(value),
+            Register::HL => self.state.set_hl(value),
+            Register::SP => self.state.sp = value,
+            _ => unreachable!("Can only set 16 bit registers"),
         }
     }
 
     pub fn push_stack(&mut self, value: u16) {
         let hi = ((value & 0xFF00) >> 8) as u8;
         let lo = (value & 0xFF) as u8;
-        self.sp -= 1;
-        self.write_mem_u8(self.sp, hi);
-        self.sp -= 1;
-        self.write_mem_u8(self.sp, lo);
+        self.state.sp -= 1;
+        self.write_mem_u8(self.state.sp, hi);
+        self.state.sp -= 1;
+        self.write_mem_u8(self.state.sp, lo);
     }
 
     pub fn pop_stack(&mut self) -> u16 {
-        let lo = self.read_mem_u8(self.sp);
-        self.sp += 1;
-        let hi = self.read_mem_u8(self.sp);
-        self.sp += 1;
+        let lo = self.read_mem_u8(self.state.sp);
+        self.state.sp += 1;
+        let hi = self.read_mem_u8(self.state.sp);
+        self.state.sp += 1;
         (u16::from(hi) << 8) | u16::from(lo)
     }
 
@@ -163,49 +176,34 @@ impl<B: Bus> Cpu<B> {
 
         match lhs {
             AddressingMode::ImmediateRegister(reg) => match data {
-                DataType::ValueU8(value) => match reg {
-                    Register::A => self.reg.a = value,
-                    Register::B => self.reg.b = value,
-                    Register::C => self.reg.c = value,
-                    Register::D => self.reg.d = value,
-                    Register::E => self.reg.e = value,
-                    Register::H => self.reg.h = value,
-                    Register::L => self.reg.l = value,
-                    _ => panic!("Must store u8 value in u8 register"),
-                },
-                DataType::ValueU16(value) => match reg {
-                    Register::BC => self.reg.set_bc(value),
-                    Register::DE => self.reg.set_de(value),
-                    Register::HL => self.reg.set_hl(value),
-                    Register::SP => self.sp = value,
-                    _ => panic!("Must store u16 value in u16 register"),
-                },
+                DataType::ValueU8(value) => self.set_immediate_register_u8(reg, value),
+                DataType::ValueU16(value) => self.set_immediate_register_u16(reg, value),
                 DataType::Address(addr) => {
                     let value = self.read_mem_u8(addr);
                     match reg {
-                        Register::A => self.reg.a = value,
-                        Register::B => self.reg.b = value,
-                        Register::C => self.reg.c = value,
-                        Register::D => self.reg.d = value,
-                        Register::E => self.reg.e = value,
-                        Register::H => self.reg.h = value,
-                        Register::L => self.reg.l = value,
-                        _ => panic!("Must store u8 value in u8 register"),
+                        Register::A => self.state.a = value,
+                        Register::B => self.state.b = value,
+                        Register::C => self.state.c = value,
+                        Register::D => self.state.d = value,
+                        Register::E => self.state.e = value,
+                        Register::H => self.state.h = value,
+                        Register::L => self.state.l = value,
+                        _ => unreachable!("Must store u8 value in u8 register"),
                     }
                 }
-                _ => panic!("Should not have none or i8 here"),
+                _ => unreachable!("Should not have none or i8 here"),
             },
             AddressingMode::AddressRegister(reg) => {
                 let addr = match reg {
-                    Register::BC => self.reg.bc(),
-                    Register::DE => self.reg.de(),
-                    Register::HL => self.reg.hl(),
-                    _ => panic!("address can't come from 8 bit registers"),
+                    Register::BC => self.state.bc(),
+                    Register::DE => self.state.de(),
+                    Register::HL => self.state.hl(),
+                    _ => unreachable!("address can't come from 8 bit registers"),
                 };
 
                 match data {
                     DataType::ValueU8(value) => self.write_mem_u8(addr, value),
-                    _ => panic!("Should only write u8 to mem / not implemented - check docs"),
+                    _ => unreachable!("Should only write u8 to mem / not implemented - check docs"),
                 }
             }
             AddressingMode::AddressU16
@@ -213,7 +211,7 @@ impl<B: Bus> Cpu<B> {
             | AddressingMode::AddressHRAM => {
                 let addr: u16 = match self.get_data(lhs) {
                     DataType::Address(addr) => addr,
-                    _ => panic!("Should only have address here"),
+                    _ => unreachable!("Should only have address here"),
                 };
 
                 match data {
@@ -224,15 +222,15 @@ impl<B: Bus> Cpu<B> {
                         self.write_mem_u8(addr, lo as u8);
                         self.write_mem_u8(addr + 1, hi as u8);
                     }
-                    _ => panic!("Should only have u8 or u16 here"),
+                    _ => unreachable!("Should only have u8 or u16 here"),
                 }
             }
-            _ => panic!("Should only have an address or value"),
+            _ => unreachable!("Should only have an address or value"),
         }
 
         match modifier {
-            Some(StoreLoadModifier::DecHL) => self.reg.set_hl(self.reg.hl() - 1),
-            Some(StoreLoadModifier::IncHL) => self.reg.set_hl(self.reg.hl() + 1),
+            Some(StoreLoadModifier::DecHL) => self.state.set_hl(self.state.hl() - 1),
+            Some(StoreLoadModifier::IncHL) => self.state.set_hl(self.state.hl() + 1),
             None => (),
         };
     }
@@ -253,50 +251,39 @@ impl<B: Bus> Cpu<B> {
         let value = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Expected u8 here"),
+            _ => unreachable!("Expected u8 here"),
         };
 
         let (sum, half_carry, _) = self.carry_track_add_u8(value, 1);
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(Register::A) => self.reg.a = sum,
-            AddressingMode::ImmediateRegister(Register::B) => self.reg.b = sum,
-            AddressingMode::ImmediateRegister(Register::C) => self.reg.c = sum,
-            AddressingMode::ImmediateRegister(Register::D) => self.reg.d = sum,
-            AddressingMode::ImmediateRegister(Register::E) => self.reg.e = sum,
-            AddressingMode::ImmediateRegister(Register::H) => self.reg.h = sum,
-            AddressingMode::ImmediateRegister(Register::L) => self.reg.l = sum,
-            AddressingMode::AddressRegister(Register::HL) => self.write_mem_u8(self.reg.hl(), sum),
-            _ => panic!("Should not have any other addressing mode"),
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, sum),
+            AddressingMode::AddressRegister(Register::HL) => {
+                self.write_mem_u8(self.state.hl(), sum)
+            }
+            _ => unreachable!("Should not have any other addressing mode"),
         };
 
-        if sum == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(sum);
 
-        self.reg.clear_n_flag();
+        self.state.clear_n_flag();
 
         if half_carry {
-            self.reg.set_h_flag();
+            self.state.set_h_flag();
         } else {
-            self.reg.clear_h_flag();
+            self.state.clear_h_flag();
         }
     }
 
     fn increment_u16(&mut self, lhs: &AddressingMode) {
         let sum = match self.get_data(lhs) {
             DataType::ValueU16(val) => val.wrapping_add(1),
-            _ => panic!("expected u16 here"),
+            _ => unreachable!("expected u16 here"),
         };
 
         match lhs {
-            AddressingMode::ImmediateRegister(Register::BC) => self.reg.set_bc(sum),
-            AddressingMode::ImmediateRegister(Register::DE) => self.reg.set_de(sum),
-            AddressingMode::ImmediateRegister(Register::HL) => self.reg.set_hl(sum),
-            AddressingMode::ImmediateRegister(Register::SP) => self.sp = sum,
-            _ => panic!("expected 16 bit register"),
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u16(reg, sum),
+            _ => unreachable!("Should not have any other addressing mode"),
         }
     }
 
@@ -304,57 +291,43 @@ impl<B: Bus> Cpu<B> {
         let value = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("expected u8 here"),
+            _ => unreachable!("expected u8 here"),
         };
 
         let (diff, half_borrow, _) = self.carry_track_sub_u8(value, 1);
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(reg) => match reg {
-                Register::A => self.reg.a = diff,
-                Register::B => self.reg.b = diff,
-                Register::C => self.reg.c = diff,
-                Register::D => self.reg.d = diff,
-                Register::E => self.reg.e = diff,
-                Register::H => self.reg.h = diff,
-                Register::L => self.reg.l = diff,
-                _ => todo!(),
-            },
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, diff),
 
-            AddressingMode::AddressRegister(Register::HL) => self.write_mem_u8(self.reg.hl(), diff),
+            AddressingMode::AddressRegister(Register::HL) => {
+                self.write_mem_u8(self.state.hl(), diff)
+            }
 
-            _ => panic!("Only use this fucntion for u8 values"),
+            _ => unreachable!("Only use this fucntion for u8 values"),
         }
 
-        if diff == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(diff);
 
-        self.reg.set_n_flag();
+        self.state.set_n_flag();
 
         if half_borrow {
-            self.reg.set_h_flag();
+            self.state.set_h_flag();
         } else {
-            self.reg.clear_h_flag();
+            self.state.clear_h_flag();
         }
     }
 
     fn decrement_u16(&mut self, addressing_mode: &AddressingMode) {
         let mut byte = match self.get_data(addressing_mode) {
             DataType::ValueU16(val) => val,
-            _ => panic!("Should only have value from 16 bit register here"),
+            _ => unreachable!("Should only have value from 16 bit register here"),
         };
 
         byte = byte.wrapping_sub(1);
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(Register::BC) => self.reg.set_bc(byte),
-            AddressingMode::ImmediateRegister(Register::DE) => self.reg.set_de(byte),
-            AddressingMode::ImmediateRegister(Register::HL) => self.reg.set_hl(byte),
-            AddressingMode::ImmediateRegister(Register::SP) => self.sp = byte,
-            _ => panic!("Should not have any mode code here"),
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u16(reg, byte),
+            _ => unreachable!("Should only have 16 bit register here"),
         }
     }
 
@@ -365,31 +338,31 @@ impl<B: Bus> Cpu<B> {
     ) -> usize {
         let offset = match self.get_data(addressing_mode) {
             DataType::ValueI8(val) => val,
-            _ => panic!("Should only have i8 here"),
+            _ => unreachable!("Should only have i8 here"),
         };
 
         let mut jump = false;
         let extra_cycles: usize = match condition {
             Some(JumpCondition::Z) => {
-                if self.reg.get_z_flag() != 0 {
+                if self.state.get_z_flag() != 0 {
                     jump = true;
                 };
                 4
             }
             Some(JumpCondition::NZ) => {
-                if self.reg.get_z_flag() == 0 {
+                if self.state.get_z_flag() == 0 {
                     jump = true;
                 };
                 4
             }
             Some(JumpCondition::C) => {
-                if self.reg.get_c_flag() != 0 {
+                if self.state.get_c_flag() != 0 {
                     jump = true;
                 };
                 4
             }
             Some(JumpCondition::NC) => {
-                if self.reg.get_c_flag() == 0 {
+                if self.state.get_c_flag() == 0 {
                     jump = true;
                 };
                 4
@@ -401,8 +374,8 @@ impl<B: Bus> Cpu<B> {
         };
 
         if jump {
-            let res: i16 = (self.pc as i16).wrapping_add(i16::from(offset));
-            self.pc = res as u16;
+            let res: i16 = (self.state.pc as i16).wrapping_add(i16::from(offset));
+            self.state.pc = res as u16;
         }
 
         extra_cycles
@@ -415,28 +388,28 @@ impl<B: Bus> Cpu<B> {
     ) -> usize {
         let (jump, extra_cycles) = match condition {
             Some(JumpCondition::NZ) => {
-                if self.reg.get_z_flag() == 0 {
+                if self.state.get_z_flag() == 0 {
                     (true, 4)
                 } else {
                     (false, 0)
                 }
             }
             Some(JumpCondition::NC) => {
-                if self.reg.get_c_flag() == 0 {
+                if self.state.get_c_flag() == 0 {
                     (true, 4)
                 } else {
                     (false, 0)
                 }
             }
             Some(JumpCondition::Z) => {
-                if self.reg.get_z_flag() == 1 {
+                if self.state.get_z_flag() == 1 {
                     (true, 4)
                 } else {
                     (false, 0)
                 }
             }
             Some(JumpCondition::C) => {
-                if self.reg.get_c_flag() == 1 {
+                if self.state.get_c_flag() == 1 {
                     (true, 4)
                 } else {
                     (false, 0)
@@ -448,10 +421,10 @@ impl<B: Bus> Cpu<B> {
         if jump {
             let addr = match self.get_data(addressing_mode) {
                 DataType::Address(addr) => addr,
-                _ => panic!("Should only have an address here"),
+                _ => unreachable!("Should only have an address here"),
             };
 
-            self.pc = addr;
+            self.state.pc = addr;
         }
 
         extra_cycles
@@ -464,28 +437,28 @@ impl<B: Bus> Cpu<B> {
     ) -> usize {
         let (jump, extra_cycles) = match condition {
             Some(JumpCondition::NZ) => {
-                if self.reg.get_z_flag() == 0 {
+                if self.state.get_z_flag() == 0 {
                     (true, 12)
                 } else {
                     (false, 0)
                 }
             }
             Some(JumpCondition::NC) => {
-                if self.reg.get_c_flag() == 0 {
+                if self.state.get_c_flag() == 0 {
                     (true, 12)
                 } else {
                     (false, 0)
                 }
             }
             Some(JumpCondition::Z) => {
-                if self.reg.get_z_flag() == 1 {
+                if self.state.get_z_flag() == 1 {
                     (true, 12)
                 } else {
                     (false, 0)
                 }
             }
             Some(JumpCondition::C) => {
-                if self.reg.get_c_flag() == 1 {
+                if self.state.get_c_flag() == 1 {
                     (true, 12)
                 } else {
                     (false, 0)
@@ -497,33 +470,33 @@ impl<B: Bus> Cpu<B> {
         if jump {
             let addr = match self.get_data(addressing_mode) {
                 DataType::Address(addr) => addr,
-                _ => panic!("Should only have an address here"),
+                _ => unreachable!("Should only have an address here"),
             };
 
-            self.push_stack(self.pc.wrapping_add(3));
-            self.pc = addr;
+            self.push_stack(self.state.pc.wrapping_add(3));
+            self.state.pc = addr;
         }
         extra_cycles
     }
 
     fn ret(&mut self, condition: Option<JumpCondition>, set_ime: bool) -> usize {
         let jump = match condition {
-            Some(JumpCondition::Z) => self.reg.get_z_flag() == 1,
-            Some(JumpCondition::NZ) => self.reg.get_z_flag() == 0,
-            Some(JumpCondition::C) => self.reg.get_c_flag() == 1,
-            Some(JumpCondition::NC) => self.reg.get_c_flag() == 0,
+            Some(JumpCondition::Z) => self.state.get_z_flag() == 1,
+            Some(JumpCondition::NZ) => self.state.get_z_flag() == 0,
+            Some(JumpCondition::C) => self.state.get_c_flag() == 1,
+            Some(JumpCondition::NC) => self.state.get_c_flag() == 0,
             None => {
-                self.pc = self.pop_stack();
+                self.state.pc = self.pop_stack();
                 if set_ime {
                     // self.write_mem_u8(0xFFFF, 0xFF);
-                    self.ime = true;
+                    self.state.ime = true;
                 }
                 return 0;
             }
         };
 
         if jump {
-            self.pc = self.pop_stack();
+            self.state.pc = self.pop_stack();
             12
         } else {
             0
@@ -533,7 +506,7 @@ impl<B: Bus> Cpu<B> {
     fn push_stack_instr(&mut self, addressing_mode: &AddressingMode) {
         let value = match self.get_data(addressing_mode) {
             DataType::ValueU16(value) => value,
-            _ => panic!("Only expected u16 value here"),
+            _ => unreachable!("Only expected u16 value here"),
         };
 
         self.push_stack(value);
@@ -543,11 +516,8 @@ impl<B: Bus> Cpu<B> {
         let value = self.pop_stack();
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(Register::AF) => self.reg.set_af(value),
-            AddressingMode::ImmediateRegister(Register::BC) => self.reg.set_bc(value),
-            AddressingMode::ImmediateRegister(Register::DE) => self.reg.set_de(value),
-            AddressingMode::ImmediateRegister(Register::HL) => self.reg.set_hl(value),
-            _ => panic!("Can only pop stack to 16 bit register"),
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u16(reg, value),
+            _ => unreachable!("Can only pop stack to 16 bit register"),
         }
     }
 
@@ -555,7 +525,7 @@ impl<B: Bus> Cpu<B> {
         let value = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Should only have u8 value here"),
+            _ => unreachable!("Should only have u8 value here"),
         };
 
         let (new_val, shifted_out_bit) = match direction {
@@ -570,41 +540,28 @@ impl<B: Bus> Cpu<B> {
             }
         };
 
-        if new_val == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(new_val);
 
-        self.reg.clear_n_flag();
-        self.reg.clear_h_flag();
+        self.state.clear_n_flag();
+        self.state.clear_h_flag();
 
         if shifted_out_bit == 1 {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         } else {
-            self.reg.clear_c_flag();
+            self.state.clear_c_flag();
         }
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(reg) => match reg {
-                Register::A => self.reg.a = new_val,
-                Register::B => self.reg.b = new_val,
-                Register::C => self.reg.c = new_val,
-                Register::D => self.reg.d = new_val,
-                Register::E => self.reg.e = new_val,
-                Register::H => self.reg.h = new_val,
-                Register::L => self.reg.l = new_val,
-                _ => panic!("Should only rotate 8 bit values"),
-            },
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, new_val),
             AddressingMode::AddressRegister(_) => {
                 let addr = match self.get_data(addressing_mode) {
                     DataType::Address(addr) => addr,
-                    _ => panic!("Expected addr value here"),
+                    _ => unreachable!("Expected addr value here"),
                 };
 
                 self.write_mem_u8(addr, new_val);
             }
-            _ => panic!("Should only have r8 or address register"),
+            _ => unreachable!("Should only have r8 or address register"),
         }
     }
 
@@ -618,14 +575,14 @@ impl<B: Bus> Cpu<B> {
         let data = match self.get_data(addressing_mode) {
             DataType::ValueU8(value) => value,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Expected u8 value here"),
+            _ => unreachable!("Expected u8 value here"),
         };
 
         let (shifted_out_bit, new_val) = match direction {
             Direction::Left => {
                 let shifted_out_bit = data.get_bit(7);
                 let new_val = if through_carry {
-                    (data << 1) | self.reg.get_c_flag()
+                    (data << 1) | self.state.get_c_flag()
                 } else {
                     (data << 1) | shifted_out_bit
                 };
@@ -634,7 +591,7 @@ impl<B: Bus> Cpu<B> {
             Direction::Right => {
                 let shifted_out_bit = data.get_bit(0);
                 let new_val = if through_carry {
-                    (data >> 1) | (self.reg.get_c_flag() << 7)
+                    (data >> 1) | (self.state.get_c_flag() << 7)
                 } else {
                     (data >> 1) | (shifted_out_bit << 7)
                 };
@@ -643,40 +600,31 @@ impl<B: Bus> Cpu<B> {
         };
 
         if update_z && (new_val == 0) {
-            self.reg.set_z_flag();
+            self.state.set_z_flag();
         } else {
-            self.reg.clear_z_flag();
+            self.state.clear_z_flag();
         }
 
-        self.reg.clear_n_flag();
-        self.reg.clear_h_flag();
+        self.state.clear_n_flag();
+        self.state.clear_h_flag();
 
         if shifted_out_bit == 1 {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         } else {
-            self.reg.clear_c_flag();
+            self.state.clear_c_flag();
         }
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(reg) => match reg {
-                Register::A => self.reg.a = new_val,
-                Register::B => self.reg.b = new_val,
-                Register::C => self.reg.c = new_val,
-                Register::D => self.reg.d = new_val,
-                Register::E => self.reg.e = new_val,
-                Register::H => self.reg.h = new_val,
-                Register::L => self.reg.l = new_val,
-                _ => panic!("Should only rotate 8 bit values"),
-            },
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, new_val),
             AddressingMode::AddressRegister(_) => {
                 let addr = match self.get_data(addressing_mode) {
                     DataType::Address(addr) => addr,
-                    _ => panic!("Expected addr value here"),
+                    _ => unreachable!("Expected addr value here"),
                 };
 
                 self.write_mem_u8(addr, new_val);
             }
-            _ => panic!("Should only have r8 or address register"),
+            _ => unreachable!("Should only have r8 or address register"),
         }
     }
 
@@ -684,7 +632,7 @@ impl<B: Bus> Cpu<B> {
         let value = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Expected u8 or addr here"),
+            _ => unreachable!("Expected u8 or addr here"),
         };
 
         let hi = value >> 4;
@@ -692,71 +640,54 @@ impl<B: Bus> Cpu<B> {
 
         let new_val = (lo << 4) | hi;
 
-        if new_val == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(new_val);
 
-        self.reg.clear_n_flag();
-        self.reg.clear_h_flag();
-        self.reg.clear_c_flag();
+        self.state.clear_n_flag();
+        self.state.clear_h_flag();
+        self.state.clear_c_flag();
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(reg) => match reg {
-                Register::A => self.reg.a = new_val,
-                Register::B => self.reg.b = new_val,
-                Register::C => self.reg.c = new_val,
-                Register::D => self.reg.d = new_val,
-                Register::E => self.reg.e = new_val,
-                Register::H => self.reg.h = new_val,
-                Register::L => self.reg.l = new_val,
-                _ => panic!("Should only rotate 8 bit values"),
-            },
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, new_val),
             AddressingMode::AddressRegister(_) => {
                 let addr = match self.get_data(addressing_mode) {
                     DataType::Address(addr) => addr,
-                    _ => panic!("Expected addr value here"),
+                    _ => unreachable!("Expected addr value here"),
                 };
 
                 self.write_mem_u8(addr, new_val);
             }
-            _ => panic!("Should only have r8 or address register"),
+            _ => unreachable!("Should only have r8 or address register"),
         }
     }
 
     fn set_u8_add_registers(&mut self, sum: u8, half_carry: bool, full_carry: bool) {
-        if sum == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(sum);
 
-        self.reg.clear_n_flag();
+        self.state.clear_n_flag();
 
         if half_carry {
-            self.reg.set_h_flag();
+            self.state.set_h_flag();
         } else {
-            self.reg.clear_h_flag();
+            self.state.clear_h_flag();
         }
 
         if full_carry {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         } else {
-            self.reg.clear_c_flag();
+            self.state.clear_c_flag();
         }
 
-        self.reg.a = sum;
+        self.state.a = sum;
     }
 
     fn add_a_u8(&mut self, rhs: &AddressingMode) {
         let value = match self.get_data(rhs) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Should not have any other data type here"),
+            _ => unreachable!("Should not have any other data type here"),
         };
 
-        let (sum, half_carry, full_carry) = self.carry_track_add_u8(self.reg.a, value);
+        let (sum, half_carry, full_carry) = self.carry_track_add_u8(self.state.a, value);
 
         self.set_u8_add_registers(sum, half_carry, full_carry);
     }
@@ -764,93 +695,94 @@ impl<B: Bus> Cpu<B> {
     fn add_hl_u16(&mut self, rhs: &AddressingMode) {
         let value = match self.get_data(rhs) {
             DataType::ValueU16(val) => val,
-            _ => panic!("Should only have a u16 value here"),
+            _ => unreachable!("Should only have a u16 value here"),
         };
 
-        let hl = self.reg.hl();
+        let hl = self.state.hl();
         let (res, carry) = hl.overflowing_add(value);
         let half_carry = (((hl & 0xFFF) + (value & 0xFFF)) & 0x1000) == 0x1000;
 
-        self.reg.set_hl(res);
+        self.state.set_hl(res);
 
-        self.reg.clear_n_flag();
+        self.state.clear_n_flag();
 
         if half_carry {
-            self.reg.set_h_flag();
+            self.state.set_h_flag();
         } else {
-            self.reg.clear_h_flag();
+            self.state.clear_h_flag();
         }
 
         if carry {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         } else {
-            self.reg.clear_c_flag();
+            self.state.clear_c_flag();
         }
     }
 
     fn add_sp_e8(&mut self, rhs: &AddressingMode) {
         let value = match self.get_data(rhs) {
             DataType::ValueI8(val) => i16::from(val),
-            _ => panic!("Should only have an i8 here"),
+            _ => unreachable!("Should only have an i8 here"),
         };
 
         let s8 = (value & 127) - (value & 128);
 
-        let before = self.sp;
-        self.sp = (self.sp as i16).wrapping_add(value as i16) as u16;
+        let before = self.state.sp;
+        self.state.sp = (self.state.sp as i16).wrapping_add(value as i16) as u16;
 
         let full_carry: bool = if value >= 0 {
             ((before as i16 & 0xFF) + s8) > 0xFF
         } else {
-            (self.sp & 0xFF) < (before & 0xFF)
+            (self.state.sp & 0xFF) < (before & 0xFF)
         };
 
         let half_carry: bool = if value >= 0 {
             ((before as i16 & 0xF) + (s8 & 0xF)) > 0xF
         } else {
-            (self.sp & 0xF) < (before & 0xF)
+            (self.state.sp & 0xF) < (before & 0xF)
         };
 
-        self.reg.clear_z_flag();
-        self.reg.clear_n_flag();
+        self.state.clear_z_flag();
+        self.state.clear_n_flag();
 
         if full_carry {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         } else {
-            self.reg.clear_c_flag();
+            self.state.clear_c_flag();
         }
 
         if half_carry {
-            self.reg.set_h_flag();
+            self.state.set_h_flag();
         } else {
-            self.reg.clear_h_flag();
+            self.state.clear_h_flag();
         }
     }
 
     fn ld_hl_sp_e8(&mut self, rhs: &AddressingMode) {
         let value = match self.get_data(rhs) {
             DataType::ValueI8(val) => i16::from(val),
-            _ => panic!("Should only have an i8 here"),
+            _ => unreachable!("Should only have an i8 here"),
         };
 
-        self.reg.set_hl((self.sp as i16).wrapping_add(value) as u16);
+        self.state
+            .set_hl((self.state.sp as i16).wrapping_add(value) as u16);
 
-        let full_carry = ((self.sp as i16 & 0xFF) + (value & 0xFF)) > 0xFF;
-        let half_carry = ((self.sp as i16 & 0xF) + (value & 0xF)) > 0xF;
+        let full_carry = ((self.state.sp as i16 & 0xFF) + (value & 0xFF)) > 0xFF;
+        let half_carry = ((self.state.sp as i16 & 0xF) + (value & 0xF)) > 0xF;
 
-        self.reg.clear_z_flag();
-        self.reg.clear_n_flag();
+        self.state.clear_z_flag();
+        self.state.clear_n_flag();
 
         if full_carry {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         } else {
-            self.reg.clear_c_flag();
+            self.state.clear_c_flag();
         }
 
         if half_carry {
-            self.reg.set_h_flag();
+            self.state.set_h_flag();
         } else {
-            self.reg.clear_h_flag();
+            self.state.clear_h_flag();
         }
     }
 
@@ -858,11 +790,11 @@ impl<B: Bus> Cpu<B> {
         let value = match self.get_data(rhs) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("expecred u8 here"),
+            _ => unreachable!("expecred u8 here"),
         };
 
-        let (sum, half_carry_1, carry_1) = self.carry_track_add_u8(self.reg.a, value);
-        let (sum, half_carry_2, carry_2) = self.carry_track_add_u8(sum, self.reg.get_c_flag());
+        let (sum, half_carry_1, carry_1) = self.carry_track_add_u8(self.state.a, value);
+        let (sum, half_carry_2, carry_2) = self.carry_track_add_u8(sum, self.state.get_c_flag());
 
         let half_carry = half_carry_1 | half_carry_2;
         let full_carry = carry_1 | carry_2;
@@ -874,33 +806,29 @@ impl<B: Bus> Cpu<B> {
         let value = match self.get_data(rhs) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Should only have u8"),
+            _ => unreachable!("Should only have u8"),
         };
 
-        let (diff, half_borrow, borrow) = self.carry_track_sub_u8(self.reg.a, value);
+        let (diff, half_borrow, borrow) = self.carry_track_sub_u8(self.state.a, value);
 
-        if diff == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(diff);
 
-        self.reg.set_n_flag();
+        self.state.set_n_flag();
 
         if half_borrow {
-            self.reg.set_h_flag();
+            self.state.set_h_flag();
         } else {
-            self.reg.clear_h_flag();
+            self.state.clear_h_flag();
         }
 
         if borrow {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         } else {
-            self.reg.clear_c_flag();
+            self.state.clear_c_flag();
         }
 
         if store_result {
-            self.reg.a = diff;
+            self.state.a = diff;
         }
     }
 
@@ -908,138 +836,111 @@ impl<B: Bus> Cpu<B> {
         let value = match self.get_data(rhs) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Should only have u8 value here"),
+            _ => unreachable!("Should only have u8 value here"),
         };
 
-        let (diff, half_borrow_1, borrow_1) = self.carry_track_sub_u8(self.reg.a, value);
-        let (diff, half_borrow_2, borrow_2) = self.carry_track_sub_u8(diff, self.reg.get_c_flag());
+        let (diff, half_borrow_1, borrow_1) = self.carry_track_sub_u8(self.state.a, value);
+        let (diff, half_borrow_2, borrow_2) =
+            self.carry_track_sub_u8(diff, self.state.get_c_flag());
 
         let half_borrow = half_borrow_1 | half_borrow_2;
         let borrow = borrow_1 | borrow_2;
 
-        if diff == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(diff);
 
-        self.reg.set_n_flag();
+        self.state.set_n_flag();
 
         if half_borrow {
-            self.reg.set_h_flag();
+            self.state.set_h_flag();
         } else {
-            self.reg.clear_h_flag();
+            self.state.clear_h_flag();
         }
 
         if borrow {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         } else {
-            self.reg.clear_c_flag();
+            self.state.clear_c_flag();
         }
 
-        self.reg.a = diff;
+        self.state.a = diff;
     }
 
     fn and(&mut self, rhs: &AddressingMode) {
         let value = match self.get_data(rhs) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("Expected u8 here"),
+            _ => unreachable!("Expected u8 here"),
         };
 
-        let res = self.reg.a & value;
+        let res = self.state.a & value;
 
-        if res == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(res);
 
-        self.reg.clear_n_flag();
-        self.reg.set_h_flag();
-        self.reg.clear_c_flag();
+        self.state.clear_n_flag();
+        self.state.set_h_flag();
+        self.state.clear_c_flag();
 
-        self.reg.a = res;
+        self.state.a = res;
     }
 
     fn xor_with_a(&mut self, rhs: &AddressingMode) {
         let res = match self.get_data(rhs) {
-            DataType::ValueU8(val) => self.reg.a ^ val,
+            DataType::ValueU8(val) => self.state.a ^ val,
             DataType::Address(addr) => {
                 let val = self.read_mem_u8(addr);
-                val ^ self.reg.a
+                val ^ self.state.a
             }
-            _ => panic!("Should only have u8"),
+            _ => unreachable!("Should only have u8"),
         };
 
-        self.reg.a = res;
+        self.state.a = res;
+        self.state.set_z_flag_from_value(res);
 
-        if res == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
-
-        self.reg.clear_n_flag();
-        self.reg.clear_h_flag();
-        self.reg.clear_c_flag();
+        self.state.clear_n_flag();
+        self.state.clear_h_flag();
+        self.state.clear_c_flag();
     }
 
     fn or_with_a(&mut self, rhs: &AddressingMode) {
         let byte = match self.get_data(rhs) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("no other data type should be here"),
+            _ => unreachable!("no other data type should be here"),
         };
 
-        let res = self.reg.a | byte;
-        self.reg.a = res;
+        let res = self.state.a | byte;
+        self.state.a = res;
 
-        if res == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
+        self.state.set_z_flag_from_value(res);
 
-        self.reg.clear_n_flag();
-        self.reg.clear_h_flag();
-        self.reg.clear_c_flag();
+        self.state.clear_n_flag();
+        self.state.clear_h_flag();
+        self.state.clear_c_flag();
     }
 
     fn check_bit(&mut self, bit: u8, addressing_mode: &AddressingMode) {
         let byte = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => val,
             DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => panic!("bit check not yet implemented or dosent exist"),
+            _ => unreachable!("bit check not yet implemented or dosent exist"),
         };
-
-        if byte.get_bit(bit) == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
-        self.reg.clear_n_flag();
-        self.reg.set_h_flag();
+        self.state.set_z_flag_from_value(byte.get_bit(bit));
+        self.state.clear_n_flag();
+        self.state.set_h_flag();
     }
 
     fn set_bit(&mut self, bit: u8, addressing_mode: &AddressingMode) {
         let (mut byte, addr) = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => (val, None),
             DataType::Address(addr) => (self.read_mem_u8(addr), Some(addr)),
-            _ => panic!("Should not have any other type here"),
+            _ => unreachable!("Should not have any other type here"),
         };
         byte.set_bit(bit);
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(Register::A) => self.reg.a = byte,
-            AddressingMode::ImmediateRegister(Register::B) => self.reg.b = byte,
-            AddressingMode::ImmediateRegister(Register::C) => self.reg.c = byte,
-            AddressingMode::ImmediateRegister(Register::D) => self.reg.d = byte,
-            AddressingMode::ImmediateRegister(Register::E) => self.reg.e = byte,
-            AddressingMode::ImmediateRegister(Register::H) => self.reg.h = byte,
-            AddressingMode::ImmediateRegister(Register::L) => self.reg.l = byte,
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, byte),
             AddressingMode::AddressRegister(Register::HL) => self.write_mem_u8(addr.unwrap(), byte),
-            _ => panic!("should not have anything else here"),
+            _ => unreachable!("should not have anything else here"),
         };
     }
 
@@ -1047,87 +948,78 @@ impl<B: Bus> Cpu<B> {
         let (mut byte, addr) = match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => (val, None),
             DataType::Address(addr) => (self.read_mem_u8(addr), Some(addr)),
-            _ => panic!("Should not have any other type here"),
+            _ => unreachable!("Should not have any other type here"),
         };
         byte.clear_bit(bit);
 
         match addressing_mode {
-            AddressingMode::ImmediateRegister(Register::A) => self.reg.a = byte,
-            AddressingMode::ImmediateRegister(Register::B) => self.reg.b = byte,
-            AddressingMode::ImmediateRegister(Register::C) => self.reg.c = byte,
-            AddressingMode::ImmediateRegister(Register::D) => self.reg.d = byte,
-            AddressingMode::ImmediateRegister(Register::E) => self.reg.e = byte,
-            AddressingMode::ImmediateRegister(Register::H) => self.reg.h = byte,
-            AddressingMode::ImmediateRegister(Register::L) => self.reg.l = byte,
+            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, byte),
             AddressingMode::AddressRegister(Register::HL) => self.write_mem_u8(addr.unwrap(), byte),
-            _ => panic!("should not have anything else here"),
+            _ => unreachable!("should not have anything else here"),
         };
     }
 
     fn daa(&mut self) {
-        if self.reg.get_n_flag() == 0 {
+        if self.state.get_n_flag() == 0 {
             // after an addition, adjust if (half-)carry occurred or if result is out of bounds
-            if (self.reg.get_c_flag() == 1) || self.reg.a > 0x99 {
-                self.reg.a = self.reg.a.wrapping_add(0x60);
-                self.reg.set_c_flag();
+            if (self.state.get_c_flag() == 1) || self.state.a > 0x99 {
+                self.state.a = self.state.a.wrapping_add(0x60);
+                self.state.set_c_flag();
             }
-            if self.reg.get_h_flag() == 1 || (self.reg.a & 0x0f) > 0x09 {
-                self.reg.a = self.reg.a.wrapping_add(0x6);
+            if self.state.get_h_flag() == 1 || (self.state.a & 0x0f) > 0x09 {
+                self.state.a = self.state.a.wrapping_add(0x6);
             }
         } else {
             // after a subtraction, only adjust if (half-)carry occurred
-            if self.reg.get_c_flag() == 1 {
-                self.reg.a = self.reg.a.wrapping_sub(0x60);
+            if self.state.get_c_flag() == 1 {
+                self.state.a = self.state.a.wrapping_sub(0x60);
             }
-            if self.reg.get_h_flag() == 1 {
-                self.reg.a = self.reg.a.wrapping_sub(0x6);
+            if self.state.get_h_flag() == 1 {
+                self.state.a = self.state.a.wrapping_sub(0x6);
             }
         }
 
-        if self.reg.a == 0 {
-            self.reg.set_z_flag();
-        } else {
-            self.reg.clear_z_flag();
-        }
-        self.reg.clear_h_flag();
+        self.state.set_z_flag_from_value(self.state.a);
+
+        self.state.clear_h_flag();
     }
 
     fn cpl(&mut self) {
-        self.reg.a = !self.reg.a;
-        self.reg.set_n_flag();
-        self.reg.set_h_flag();
+        self.state.a = !self.state.a;
+        self.state.set_n_flag();
+        self.state.set_h_flag();
     }
 
     fn scf(&mut self) {
-        self.reg.clear_n_flag();
-        self.reg.clear_h_flag();
-        self.reg.set_c_flag();
+        self.state.clear_n_flag();
+        self.state.clear_h_flag();
+        self.state.set_c_flag();
     }
 
     fn ccf(&mut self) {
-        self.reg.clear_n_flag();
-        self.reg.clear_h_flag();
+        self.state.clear_n_flag();
+        self.state.clear_h_flag();
 
-        if self.reg.get_c_flag() == 1 {
-            self.reg.clear_c_flag();
+        if self.state.get_c_flag() == 1 {
+            self.state.clear_c_flag();
         } else {
-            self.reg.set_c_flag();
+            self.state.set_c_flag();
         }
     }
 
     fn reset_vec(&mut self, addr: u16) {
-        self.push_stack(self.pc.wrapping_add(1));
-        self.pc = addr;
+        self.push_stack(self.state.pc.wrapping_add(1));
+        self.state.pc = addr;
     }
 
     pub fn execute_next_opcode(&mut self) -> Result<usize, CpuError> {
         // Get next instruction
-        let mut code = self.read_mem_u8(self.pc);
+        let mut code = self.read_mem_u8(self.state.pc);
         let prefixed = code == 0xcb;
 
         let (opcode_asm, opcode_bytes, opcode_cycles, lhs, rhs) = {
             let opcode_set = if prefixed {
-                code = self.read_mem_u8(self.pc.wrapping_add(1));
+                code = self.read_mem_u8(self.state.pc.wrapping_add(1));
                 &self.prefixed_opcodes
             } else {
                 &self.normal_opcodes
@@ -1154,13 +1046,13 @@ impl<B: Bus> Cpu<B> {
 
         self.debug_ctx
             .borrow_mut()
-            .push_call_log(self.pc, code, &opcode_asm);
+            .push_call_log(self.state.pc, code, &opcode_asm);
 
         // Execute instruction
         let mut skip_pc_increase = false;
         let mut extra_cycles: usize = 0;
         if prefixed {
-            code = self.read_mem_u8(self.pc.wrapping_add(1));
+            code = self.read_mem_u8(self.state.pc.wrapping_add(1));
             match code {
                 0x00..=0x07 => self.rotate(&lhs, Direction::Left, true, false),
                 0x08..=0x0f => self.rotate(&lhs, Direction::Right, true, false),
@@ -1378,20 +1270,20 @@ impl<B: Bus> Cpu<B> {
                 }
                 0xe8 => self.add_sp_e8(&rhs),
                 0xf8 => self.ld_hl_sp_e8(&rhs),
-                0xf3 => self.ime = false,
-                0xfb => self.ime = true,
+                0xf3 => self.state.ime = false,
+                0xfb => self.state.ime = true,
                 _ => return Err(self.crash(CpuError::OpcodeNotImplemented(code, false))),
             };
         };
 
         if !skip_pc_increase {
-            self.pc = self.pc.wrapping_add(opcode_bytes);
+            self.state.pc = self.state.pc.wrapping_add(opcode_bytes);
         }
         Ok(opcode_cycles + extra_cycles)
     }
 
     pub fn handle_interrupts(&mut self) -> Option<usize> {
-        if !self.ime {
+        if !self.state.ime {
             return None;
         }
 
@@ -1406,12 +1298,12 @@ impl<B: Bus> Cpu<B> {
 
         for bit in 0..5 {
             if triggered_interrupts.get_bit(bit) != 0 {
-                self.ime = false;
+                self.state.ime = false;
                 interrupt_flag.clear_bit(bit);
                 self.memory.borrow_mut().write_u8(0xFF0F, interrupt_flag);
 
-                self.push_stack(self.pc);
-                self.pc = match bit {
+                self.push_stack(self.state.pc);
+                self.state.pc = match bit {
                     0 => 0x40,
                     1 => 0x48,
                     2 => 0x50,
@@ -1421,7 +1313,7 @@ impl<B: Bus> Cpu<B> {
                 };
                 self.debug_ctx
                     .borrow_mut()
-                    .push_note(format!("triggered interrupt: {:4x}", self.pc));
+                    .push_note(format!("triggered interrupt: {:4x}", self.state.pc));
                 self.debug_ctx.borrow_mut().dump_logs();
                 return Some(20);
             }
@@ -1429,23 +1321,11 @@ impl<B: Bus> Cpu<B> {
         None
     }
 
-    pub fn load_state(&mut self, state: &State) {
-        self.reg.a = state.a;
-        self.reg.b = state.b;
-        self.reg.c = state.c;
-        self.reg.d = state.d;
-        self.reg.e = state.e;
-        self.reg.f = state.f;
-        self.reg.h = state.h;
-        self.reg.l = state.l;
-        self.sp = state.sp;
-        self.pc = state.pc;
+    pub fn load_state(&mut self, state: CpuState) {
+        self.state = state;
     }
 
-    pub fn get_state(&self) -> (u8, u8, u8, u8, u8, u8, u8, u8, u16, u16) {
-        (
-            self.reg.a, self.reg.b, self.reg.c, self.reg.d, self.reg.e, self.reg.f, self.reg.h,
-            self.reg.l, self.sp, self.pc,
-        )
+    pub fn get_state(&self) -> CpuState {
+        self.state.clone()
     }
 }

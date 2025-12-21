@@ -77,8 +77,7 @@ pub struct Ppu<B: Bus> {
     background_fifo: Fifo,
     object_fifo: Fifo,
     palette: Palette,
-    pixels_to_discard: u8, // For fine scrolling
-                           // mapped registers
+    pixels_to_discard: u8, // For fine scrolling mapped registers
 }
 
 impl<B: Bus> Ppu<B> {

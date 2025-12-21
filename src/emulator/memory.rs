@@ -75,7 +75,6 @@ impl Bus for DMGBus {
             0xFEA0..=0xFEFF => 0x00, // not useable range, refer to pandocs
             0xFF00..=0xFF7F => self.io_registers[addr as usize - 0xFF00],
             0xFF80..=0xFFFF => self.hram[addr as usize - 0xFF80],
-            _ => unreachable!(),
         }
     }
 
@@ -102,7 +101,6 @@ impl Bus for DMGBus {
             0xFEA0..=0xFEFF => (), // not useable range, refer to pandocs
             0xFF00..=0xFF7F => self.io_registers[addr as usize - 0xFF00] = value,
             0xFF80..=0xFFFF => self.hram[addr as usize - 0xFF80] = value,
-            _ => panic!("Tried writing to illegal address {addr:#06x}"),
         }
     }
 
@@ -130,10 +128,12 @@ impl Bus for DMGBus {
     }
 }
 
+#[cfg(test)]
 pub struct RawBus {
     ram: Vec<u8>,
 }
 
+#[cfg(test)]
 impl RawBus {
     pub fn new() -> Self {
         Self {
@@ -142,6 +142,7 @@ impl RawBus {
     }
 }
 
+#[cfg(test)]
 impl Bus for RawBus {
     fn read_u8(&self, addr: u16) -> u8 {
         self.ram[addr as usize]
@@ -164,5 +165,5 @@ impl Bus for RawBus {
         range.into_iter().map(|i| self.read_u8(i)).collect()
     }
 
-    fn load_cartridge(&mut self, cartridge: Cartridge) {}
+    fn load_cartridge(&mut self, _cartridge: Cartridge) {}
 }

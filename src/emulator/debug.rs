@@ -6,6 +6,7 @@ use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
 use chrono::{DateTime, Local};
 
 use crate::{
+    emulator::cpu::{state::CpuState, Cpu},
     utils::{bit_ops::BitOps, frame_buffer::FrameBuffer},
     Palette,
 };
