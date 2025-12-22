@@ -102,7 +102,7 @@ pub struct Emulator<B: Bus> {
     cpu: Cpu<B>,
     ppu: Ppu<B>,
     memory: Rc<RefCell<B>>,
-    pub debug_ctx: Rc<RefCell<DebugCtx<B>>>,
+    debug_ctx: Rc<RefCell<DebugCtx<B>>>,
     timer_cycles: usize,
     frames: usize,
     running: RunType,
@@ -255,6 +255,10 @@ impl<B: Bus> Emulator<B> {
                 Ok(self.ppu.get_frame())
             }
         }
+    }
+
+    pub fn debug_ctx(&self) -> Rc<RefCell<DebugCtx<B>>> {
+        Rc::clone(&self.debug_ctx)
     }
 
     #[cfg(test)]

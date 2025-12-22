@@ -305,4 +305,12 @@ impl<B: Bus> DebugCtx<B> {
         }
         buff
     }
+
+    pub fn raw_read(&self, addr: u16) -> u8 {
+        self.memory.borrow().raw_read(addr)
+    }
+
+    pub fn raw_write(&mut self, addr: u16, value: u8) {
+        self.memory.borrow_mut().write_u8(addr, value);
+    }
 }

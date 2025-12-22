@@ -18,6 +18,7 @@ impl EmuScreen {
             },
         }
     }
+
     pub fn update_texture(&mut self, buff: &[u8], ctx: &Context) {
         let image = egui::ColorImage::from_rgb(self.size, buff);
         if let Some(tex) = &mut self.texture {
@@ -26,6 +27,7 @@ impl EmuScreen {
             self.texture = Some(ctx.load_texture("gb_display", image, self.texture_options))
         }
     }
+
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         if let Some(tex) = &self.texture {
             ui.add(Image::new(tex).fit_to_exact_size(Vec2::new(

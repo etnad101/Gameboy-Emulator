@@ -9,6 +9,8 @@ pub trait Bus {
     fn clear(&mut self);
     fn get_range(&self, range: Range<u16>) -> Vec<u8>;
     fn load_cartridge(&mut self, cartridge: Cartridge);
+    fn raw_read(&self, addr: u16) -> u8;
+    fn raw_write(&mut self, addr: u16, value: u8);
 }
 
 pub struct DMGBus {
@@ -126,6 +128,14 @@ impl Bus for DMGBus {
     fn load_cartridge(&mut self, cartridge: Cartridge) {
         self.cartridge = Some(cartridge);
     }
+
+    fn raw_read(&self, addr: u16) -> u8 {
+        self.read_u8(addr)
+    }
+
+    fn raw_write(&mut self, addr: u16, value: u8) {
+        self.write_u8(addr, value);
+    }
 }
 
 #[cfg(test)]
@@ -166,4 +176,12 @@ impl Bus for RawBus {
     }
 
     fn load_cartridge(&mut self, _cartridge: Cartridge) {}
+
+    fn raw_read(&self, addr: u16) -> u8 {
+        self.ram[addr as usize]
+    }
+
+    fn raw_write(&mut self, addr: u16, value: u8) {
+        self.ram[addr as usize] = value;
+    }
 }

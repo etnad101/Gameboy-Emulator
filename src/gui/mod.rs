@@ -5,11 +5,12 @@ use egui::Context;
 use crate::emulator::cartridge::Cartridge;
 use crate::emulator::DMGBus;
 use crate::emulator::{Emulator, RunType, SCREEN_HEIGHT, SCREEN_WIDTH};
-use crate::gui::components::emu_screen::EmuScreen;
+use crate::gui::components::{emu_screen::EmuScreen, memory_editor::MemoryEditor};
 
 pub struct EmulatorGui {
     emulator: Emulator<DMGBus>,
     emu_screen: EmuScreen,
+    memory_editor: MemoryEditor,
     run_type: RunType,
     show_debug_screen: bool,
 }
@@ -17,9 +18,11 @@ pub struct EmulatorGui {
 impl EmulatorGui {
     pub fn new(emulator: Emulator<DMGBus>) -> Self {
         let run_type = emulator.run_type();
+        let memory_editor = MemoryEditor::new(16, 0x10000, 0x100);
         Self {
             emulator,
             emu_screen: EmuScreen::new(SCREEN_WIDTH, SCREEN_HEIGHT),
+            memory_editor,
             run_type,
             show_debug_screen: false,
         }
@@ -55,23 +58,43 @@ impl eframe::App for EmulatorGui {
                         self.emulator.set_run_type(self.run_type);
                         self.emulator.load_rom(cartridge).unwrap();
                     }
+                    if ui.button("Dump Memory").clicked() {
+                        self.emulator.debug_ctx().borrow_mut().dump_logs();
+                    }
                 });
             });
             ui.separator();
-            ui.horizontal_top(|ui| {
+            ui.horizontal(|ui| {
                 self.emu_screen.ui(ui);
+
                 if self.show_debug_screen {
                     ui.separator();
-                    ui.label("Debugging screen");
-                    if ui.button("Close").clicked() {
-                        self.show_debug_screen = false;
-                    }
-                    if ui.button("Step").clicked() {
-                        self.emulator.set_run_type(RunType::Instr);
-                        self.emu_screen
-                            .update_texture(&self.emulator.tick().unwrap().rgb(), ctx);
-                    }
                 }
+                ui.vertical(|ui| {
+                    if self.show_debug_screen {
+                        ui.horizontal(|ui| {
+                            ui.label("Debugging screen");
+                            if ui.button("Close").clicked() {
+                                self.show_debug_screen = false;
+                            }
+                        });
+                        if ui.button("Step").clicked() {
+                            self.emulator.set_run_type(RunType::Instr);
+                            self.emu_screen
+                                .update_texture(&self.emulator.tick().unwrap().rgb(), ctx);
+                        }
+                        self.memory_editor.ui(
+                            ui,
+                            |addr| self.emulator.debug_ctx().borrow().raw_read(addr),
+                            |addr, value| {
+                                self.emulator
+                                    .debug_ctx()
+                                    .borrow_mut()
+                                    .raw_write(addr, value)
+                            },
+                        );
+                    }
+                });
             });
         });
 
