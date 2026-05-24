@@ -63,7 +63,6 @@ impl Fifo {
 
 pub struct Ppu<B: Bus> {
     memory: Rc<RefCell<B>>,
-    debugger: Rc<RefCell<DebugCtx<B>>>,
     frame: FrameBuffer,
     mode: PpuMode,
     current_scanline_cycles: usize,
@@ -81,15 +80,10 @@ pub struct Ppu<B: Bus> {
 }
 
 impl<B: Bus> Ppu<B> {
-    pub fn new(
-        memory: Rc<RefCell<B>>,
-        debugger: Rc<RefCell<DebugCtx<B>>>,
-        palette: Palette,
-    ) -> Self {
+    pub fn new(memory: Rc<RefCell<B>>, palette: Palette) -> Self {
         memory.borrow_mut().write_u8(LCDRegister::Ly.into(), 0);
         Self {
             memory,
-            debugger,
             frame: FrameBuffer::new(SCREEN_WIDTH, SCREEN_HEIGHT),
             mode: PpuMode::OAMScan,
             current_scanline_cycles: 0,

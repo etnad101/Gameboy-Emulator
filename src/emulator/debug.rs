@@ -1,12 +1,18 @@
 //! Handles all debug related function
 
 use core::panic;
-use std::{cell::RefCell, collections::VecDeque, fs, path::Path, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, VecDeque},
+    fs,
+    path::Path,
+    rc::Rc,
+};
 
 use chrono::{DateTime, Local};
 
 use crate::{
-    emulator::cpu::{state::CpuState, Cpu},
+    emulator::cpu::opcodes::Opcode,
     utils::{bit_ops::BitOps, frame_buffer::FrameBuffer},
     Palette,
 };
@@ -57,7 +63,7 @@ impl Tile {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum DebugFlag {
     ShowTileMap,
     ShowRegisters,
@@ -66,11 +72,18 @@ pub enum DebugFlag {
     DumpCallLog,
 }
 
+pub enum Log {
+    Instruction(u16, u8, bool),
+    Note(String),
+}
+
 pub struct DebugCtx<B: Bus> {
     flags: Vec<DebugFlag>,
     memory: Rc<RefCell<B>>,
     palette: Palette,
-    call_log: VecDeque<String>,
+    call_log: VecDeque<Log>,
+    opcode_map: HashMap<u8, Opcode>,
+    prefix_opcode_map: HashMap<u8, Opcode>,
 }
 
 impl<B: Bus> DebugCtx<B> {
@@ -80,6 +93,8 @@ impl<B: Bus> DebugCtx<B> {
             memory,
             palette,
             call_log: VecDeque::new(),
+            opcode_map: Opcode::generate_normal_opcode_map(),
+            prefix_opcode_map: Opcode::generate_prefixed_opcode_map(),
         }
     }
 
@@ -87,45 +102,67 @@ impl<B: Bus> DebugCtx<B> {
         self.flags = flags;
     }
 
+    pub fn get_flags(&self) -> Vec<DebugFlag> {
+        self.flags.clone()
+    }
+
     pub fn set_palette(&mut self, palette: Palette) {
         self.palette = palette;
     }
 
-    fn push_call_log_helper(&mut self, msg: String) {
+    fn push_call_log_helper(&mut self, log: Log) {
         if !self.flags.contains(&DebugFlag::DumpCallLog)
             && !self.flags.contains(&DebugFlag::ShowRegisters)
         {
             return;
         }
 
-        self.call_log.push_back(msg);
+        self.call_log.push_back(log);
 
         if self.call_log.len() > CALL_LOG_HISTORY_LENGTH {
             self.call_log.pop_front();
         }
     }
 
-    pub fn push_call_log(&mut self, pc: u16, code: u8, asm: &str) {
-        self.push_call_log_helper(format!("pc:{pc:#06x} -> '{asm}' ({code:#04x})"));
+    pub fn push_call_log(&mut self, pc: u16, code: u8, prefixed: bool) {
+        self.push_call_log_helper(Log::Instruction(pc, code, prefixed));
     }
 
     pub fn push_note(&mut self, note: String) {
-        self.push_call_log_helper(note);
+        self.push_call_log_helper(Log::Note(note));
     }
 
-    pub fn create_call_log_dump(&self) -> Option<String> {
+    fn decode_instr(&self, opcode: &u8, preifxed: bool) -> String {
+        let instr;
+        if preifxed {
+            instr = self.prefix_opcode_map.get(opcode).unwrap();
+        } else {
+            instr = self.opcode_map.get(opcode).unwrap();
+        }
+        format!("{}", instr.asm)
+    }
+
+    pub fn build_call_log(&self) -> Option<String> {
         if !self.flags.contains(&DebugFlag::DumpCallLog)
             && !self.flags.contains(&DebugFlag::ShowRegisters)
         {
             return None;
         }
-        let mut log = String::from("CALL LOG\n------------------------------------\n");
-        for instruction in &self.call_log {
-            log.push_str(instruction);
-            log.push('\n');
+
+        let mut log_str = String::new();
+
+        for log in &self.call_log {
+            match log {
+                Log::Instruction(addr, opcode, prefixed) => {
+                    let instr = self.decode_instr(opcode, *prefixed);
+                    log_str.push_str(&format!("{addr:06x}: {instr}"))
+                }
+                Log::Note(msg) => log_str.push_str(msg),
+            }
+            log_str.push('\n');
         }
 
-        Some(log)
+        Some(log_str)
     }
 
     pub fn create_mem_dump(&self) -> Option<String> {
@@ -185,7 +222,7 @@ impl<B: Bus> DebugCtx<B> {
 
     pub fn dump_logs(&mut self) {
         let mut log = String::from("BEGIN CRASH LOG\n");
-        if let Some(l) = self.create_call_log_dump() {
+        if let Some(l) = self.build_call_log() {
             log.push_str(&l);
         }
         if let Some(l) = self.create_mem_dump() {

@@ -1,4 +1,6 @@
 mod components;
+use std::cell::RefCell;
+
 use eframe::Frame;
 use egui::Context;
 
@@ -6,6 +8,7 @@ use crate::emulator::cartridge::Cartridge;
 use crate::emulator::DMGBus;
 use crate::emulator::{Emulator, RunType, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::gui::components::{emu_screen::EmuScreen, memory_editor::MemoryEditor};
+use crate::Palette;
 
 pub struct EmulatorGui {
     emulator: Emulator<DMGBus>,
@@ -54,12 +57,15 @@ impl eframe::App for EmulatorGui {
                             .pick_file()
                             .unwrap();
                         let cartridge = Cartridge::from(path.to_str().unwrap()).unwrap();
-                        self.emulator = Emulator::<DMGBus>::new();
+                        let flags = self.emulator.debug_ctx().get_flags();
+                        self.emulator = Emulator::<DMGBus>::new()
+                            .with_debug_flags(flags)
+                            .with_rom(cartridge)
+                            .unwrap();
                         self.emulator.set_run_type(self.run_type);
-                        self.emulator.load_rom(cartridge).unwrap();
                     }
                     if ui.button("Dump Memory").clicked() {
-                        self.emulator.debug_ctx().borrow_mut().dump_logs();
+                        self.emulator.debug_ctx_mut().dump_logs();
                     }
                 });
             });
@@ -83,16 +89,16 @@ impl eframe::App for EmulatorGui {
                             self.emu_screen
                                 .update_texture(&self.emulator.tick().unwrap().rgb(), ctx);
                         }
+                        let debug = RefCell::new(self.emulator.debug_ctx_mut());
                         self.memory_editor.ui(
                             ui,
-                            |addr| self.emulator.debug_ctx().borrow().raw_read(addr),
-                            |addr, value| {
-                                self.emulator
-                                    .debug_ctx()
-                                    .borrow_mut()
-                                    .raw_write(addr, value)
-                            },
+                            |addr| debug.borrow().raw_read(addr),
+                            |addr, value| debug.borrow_mut().raw_write(addr, value),
                         );
+                        let call_log = self.emulator.debug_ctx().build_call_log();
+                        if let Some(log) = call_log {
+                            ui.label(log);
+                        }
                     }
                 });
             });

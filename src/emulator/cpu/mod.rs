@@ -1,4 +1,4 @@
-mod opcodes;
+pub mod opcodes;
 pub(super) mod state;
 
 use super::{debug::DebugCtx, errors::CpuError};
@@ -43,24 +43,22 @@ pub struct Cpu<B: Bus> {
     normal_opcodes: HashMap<u8, Opcode>,
     prefixed_opcodes: HashMap<u8, Opcode>,
     memory: Rc<RefCell<B>>,
-    debug_ctx: Rc<RefCell<DebugCtx<B>>>,
 }
 
 impl<B: Bus> Cpu<B> {
-    pub fn new(memory: Rc<RefCell<B>>, debugger: Rc<RefCell<DebugCtx<B>>>) -> Self {
+    pub fn new(memory: Rc<RefCell<B>>) -> Self {
         Self {
             state: CpuState::new(),
             normal_opcodes: Opcode::generate_normal_opcode_map(),
             prefixed_opcodes: Opcode::generate_prefixed_opcode_map(),
             memory,
-            debug_ctx: debugger,
         }
     }
 
     // Debugging methods
 
-    pub fn crash(&self, error: CpuError) -> CpuError {
-        self.debug_ctx.borrow_mut().dump_logs();
+    pub fn crash(&self, error: CpuError, debug_ctx: &mut DebugCtx<B>) -> CpuError {
+        debug_ctx.dump_logs();
         eprintln!("{:#06x}", self.state.pc);
         error
     }
@@ -1012,7 +1010,7 @@ impl<B: Bus> Cpu<B> {
         self.state.pc = addr;
     }
 
-    pub fn execute_next_opcode(&mut self) -> Result<usize, CpuError> {
+    pub fn execute_next_opcode(&mut self, debug_ctx: &mut DebugCtx<B>) -> Result<usize, CpuError> {
         // Get next instruction
         let mut code = self.read_mem_u8(self.state.pc);
         let prefixed = code == 0xcb;
@@ -1029,9 +1027,11 @@ impl<B: Bus> Cpu<B> {
                 Some(op) => op,
                 None => {
                     if prefixed {
-                        return Err(self.crash(CpuError::UnrecognizedOpcode(code, true)));
+                        return Err(self.crash(CpuError::UnrecognizedOpcode(code, true), debug_ctx));
                     } else {
-                        return Err(self.crash(CpuError::UnrecognizedOpcode(code, false)));
+                        return Err(
+                            self.crash(CpuError::UnrecognizedOpcode(code, false), debug_ctx)
+                        );
                     }
                 }
             };
@@ -1044,9 +1044,7 @@ impl<B: Bus> Cpu<B> {
             )
         };
 
-        self.debug_ctx
-            .borrow_mut()
-            .push_call_log(self.state.pc, code, &opcode_asm);
+        debug_ctx.push_call_log(self.state.pc, code, prefixed);
 
         // Execute instruction
         let mut skip_pc_increase = false;
@@ -1272,7 +1270,7 @@ impl<B: Bus> Cpu<B> {
                 0xf8 => self.ld_hl_sp_e8(&rhs),
                 0xf3 => self.state.ime = false,
                 0xfb => self.state.ime = true,
-                _ => return Err(self.crash(CpuError::OpcodeNotImplemented(code, false))),
+                _ => return Err(self.crash(CpuError::OpcodeNotImplemented(code, false), debug_ctx)),
             };
         };
 
@@ -1282,7 +1280,7 @@ impl<B: Bus> Cpu<B> {
         Ok(opcode_cycles + extra_cycles)
     }
 
-    pub fn handle_interrupts(&mut self) -> Option<usize> {
+    pub fn handle_interrupts(&mut self, debug_ctx: &mut DebugCtx<B>) -> Option<usize> {
         if !self.state.ime {
             return None;
         }
@@ -1311,10 +1309,8 @@ impl<B: Bus> Cpu<B> {
                     4 => 0x60,
                     _ => unreachable!(),
                 };
-                self.debug_ctx
-                    .borrow_mut()
-                    .push_note(format!("triggered interrupt: {:4x}", self.state.pc));
-                self.debug_ctx.borrow_mut().dump_logs();
+                debug_ctx.push_note(format!("triggered interrupt: {:4x}", self.state.pc));
+                debug_ctx.dump_logs();
                 return Some(20);
             }
         }

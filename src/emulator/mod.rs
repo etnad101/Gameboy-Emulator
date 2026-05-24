@@ -102,7 +102,7 @@ pub struct Emulator<B: Bus> {
     cpu: Cpu<B>,
     ppu: Ppu<B>,
     memory: Rc<RefCell<B>>,
-    debug_ctx: Rc<RefCell<DebugCtx<B>>>,
+    debug_ctx: DebugCtx<B>,
     timer_cycles: usize,
     frames: usize,
     running: RunType,
@@ -117,12 +117,12 @@ impl Emulator<DMGBus> {
 
         let palette: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
-        let debug_ctx = Rc::new(RefCell::new(DebugCtx::new(Rc::clone(&memory_bus), palette)));
-        let cpu = Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx));
+        let debug_ctx = DebugCtx::new(Rc::clone(&memory_bus), palette);
+        let cpu = Cpu::new(Rc::clone(&memory_bus));
 
         Self {
             cpu,
-            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx), palette),
+            ppu: Ppu::new(Rc::clone(&memory_bus), palette),
             memory: Rc::clone(&memory_bus),
             debug_ctx,
             timer_cycles: 0,
@@ -140,11 +140,11 @@ impl Emulator<RawBus> {
 
         let palette: Palette = (0xFFFFFF, 0xa9a9a9, 0x545454, 0x000000);
 
-        let debug_ctx = Rc::new(RefCell::new(DebugCtx::new(Rc::clone(&memory_bus), palette)));
+        let debug_ctx = DebugCtx::new(Rc::clone(&memory_bus), palette);
 
         Self {
-            cpu: Cpu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx)),
-            ppu: Ppu::new(Rc::clone(&memory_bus), Rc::clone(&debug_ctx), palette),
+            cpu: Cpu::new(Rc::clone(&memory_bus)),
+            ppu: Ppu::new(Rc::clone(&memory_bus), palette),
             memory: Rc::clone(&memory_bus),
             debug_ctx,
             timer_cycles: 0,
@@ -156,13 +156,13 @@ impl Emulator<RawBus> {
 }
 
 impl<B: Bus> Emulator<B> {
-    pub fn with_debug_flags(self, debug_flags: Vec<DebugFlag>) -> Self {
-        self.debug_ctx.borrow_mut().set_flags(debug_flags);
+    pub fn with_debug_flags(mut self, debug_flags: Vec<DebugFlag>) -> Self {
+        self.debug_ctx.set_flags(debug_flags);
         self
     }
 
     pub fn with_palette(mut self, palette: Palette) -> Self {
-        self.debug_ctx.borrow_mut().set_palette(palette);
+        self.debug_ctx.set_palette(palette);
         self.ppu.set_palette(palette);
         self
     }
@@ -225,7 +225,7 @@ impl<B: Bus> Emulator<B> {
     }
 
     pub fn tick_instr(&mut self) -> Result<(), Box<dyn Error>> {
-        let cycles = self.cpu.execute_next_opcode()?;
+        let cycles = self.cpu.execute_next_opcode(&mut self.debug_ctx)?;
         self.cycles_this_frame += cycles;
 
         if self.cycles_this_frame >= MAX_CYCLES_PER_FRAME {
@@ -235,7 +235,7 @@ impl<B: Bus> Emulator<B> {
         self.update_timers(cycles);
         self.ppu.update_graphics(cycles);
 
-        if let Some(interrupt_cycles) = self.cpu.handle_interrupts() {
+        if let Some(interrupt_cycles) = self.cpu.handle_interrupts(&mut self.debug_ctx) {
             self.cycles_this_frame += interrupt_cycles;
             self.update_timers(cycles);
             self.ppu.update_graphics(cycles);
@@ -257,8 +257,12 @@ impl<B: Bus> Emulator<B> {
         }
     }
 
-    pub fn debug_ctx(&self) -> Rc<RefCell<DebugCtx<B>>> {
-        Rc::clone(&self.debug_ctx)
+    pub fn debug_ctx(&self) -> &DebugCtx<B> {
+        &self.debug_ctx
+    }
+
+    pub fn debug_ctx_mut(&mut self) -> &mut DebugCtx<B> {
+        &mut self.debug_ctx
     }
 
     #[cfg(test)]
@@ -365,7 +369,7 @@ impl<B: Bus> Emulator<B> {
                 current_test += 1;
                 std::io::stdout().flush().unwrap();
                 self.load_test_case(&test);
-                match self.cpu.execute_next_opcode() {
+                match self.cpu.execute_next_opcode(&mut self.debug_ctx) {
                     Ok(_) => (),
                     Err(CpuError::OpcodeError(e)) => {
                         println!("{e}");
