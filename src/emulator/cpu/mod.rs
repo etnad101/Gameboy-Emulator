@@ -38,6 +38,40 @@ enum DataType {
     None,
 }
 
+impl DataType {
+    fn as_address(&self) -> Option<u16> {
+        if let DataType::Address(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
+    fn as_u8(&self) -> Option<u8> {
+        if let DataType::ValueU8(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
+    fn as_u16(&self) -> Option<u16> {
+        if let DataType::ValueU16(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+
+    fn as_i8(&self) -> Option<i8> {
+        if let DataType::ValueI8(v) = self {
+            Some(*v)
+        } else {
+            None
+        }
+    }
+}
+
 pub struct Cpu<B: Bus> {
     state: CpuState,
     normal_opcodes: HashMap<u8, Opcode>,
@@ -74,6 +108,14 @@ impl<B: Bus> Cpu<B> {
 
     fn read_mem_u16(&self, addr: u16) -> u16 {
         self.memory.borrow().read_u16(addr)
+    }
+
+    fn resolve_u8(&self, data: DataType) -> Option<u8> {
+        match data {
+            DataType::ValueU8(val) => Some(val),
+            DataType::Address(addr) => Some(self.read_mem_u8(addr)),
+            _ => None,
+        }
     }
 
     fn get_data(&self, addressing_mode: &AddressingMode) -> DataType {
@@ -178,16 +220,7 @@ impl<B: Bus> Cpu<B> {
                 DataType::ValueU16(value) => self.set_immediate_register_u16(reg, value),
                 DataType::Address(addr) => {
                     let value = self.read_mem_u8(addr);
-                    match reg {
-                        Register::A => self.state.a = value,
-                        Register::B => self.state.b = value,
-                        Register::C => self.state.c = value,
-                        Register::D => self.state.d = value,
-                        Register::E => self.state.e = value,
-                        Register::H => self.state.h = value,
-                        Register::L => self.state.l = value,
-                        _ => unreachable!("Must store u8 value in u8 register"),
-                    }
+                    self.set_immediate_register_u8(reg, value);
                 }
                 _ => unreachable!("Should not have none or i8 here"),
             },
@@ -246,11 +279,10 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn increment_u8(&mut self, addressing_mode: &AddressingMode) {
-        let value = match self.get_data(addressing_mode) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("Expected u8 here"),
-        };
+        let data = self.get_data(addressing_mode);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let (sum, half_carry, _) = self.carry_track_add_u8(value, 1);
 
@@ -274,23 +306,24 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn increment_u16(&mut self, lhs: &AddressingMode) {
-        let sum = match self.get_data(lhs) {
-            DataType::ValueU16(val) => val.wrapping_add(1),
-            _ => unreachable!("expected u16 here"),
+        let sum = self
+            .get_data(lhs)
+            .as_u16()
+            .expect("Expected u16 here")
+            .wrapping_add(1);
+
+        let AddressingMode::ImmediateRegister(reg) = lhs else {
+            unreachable!("Should not have any other addressing mode")
         };
 
-        match lhs {
-            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u16(reg, sum),
-            _ => unreachable!("Should not have any other addressing mode"),
-        }
+        self.set_immediate_register_u16(reg, sum)
     }
 
     fn decrement_u8(&mut self, addressing_mode: &AddressingMode) {
-        let value = match self.get_data(addressing_mode) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("expected u8 here"),
-        };
+        let data = self.get_data(addressing_mode);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let (diff, half_borrow, _) = self.carry_track_sub_u8(value, 1);
 
@@ -316,17 +349,17 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn decrement_u16(&mut self, addressing_mode: &AddressingMode) {
-        let mut byte = match self.get_data(addressing_mode) {
-            DataType::ValueU16(val) => val,
-            _ => unreachable!("Should only have value from 16 bit register here"),
+        let value = self
+            .get_data(addressing_mode)
+            .as_u16()
+            .expect("Expected u16")
+            .wrapping_sub(1);
+
+        let AddressingMode::ImmediateRegister(reg) = addressing_mode else {
+            unreachable!("Should only have 16 bit register here")
         };
 
-        byte = byte.wrapping_sub(1);
-
-        match addressing_mode {
-            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u16(reg, byte),
-            _ => unreachable!("Should only have 16 bit register here"),
-        }
+        self.set_immediate_register_u16(reg, value)
     }
 
     fn rel_jump(
@@ -334,10 +367,7 @@ impl<B: Bus> Cpu<B> {
         addressing_mode: &AddressingMode,
         condition: Option<JumpCondition>,
     ) -> usize {
-        let offset = match self.get_data(addressing_mode) {
-            DataType::ValueI8(val) => val,
-            _ => unreachable!("Should only have i8 here"),
-        };
+        let offset = self.get_data(addressing_mode).as_i8().expect("Expected i8");
 
         let mut jump = false;
         let extra_cycles: usize = match condition {
@@ -417,10 +447,10 @@ impl<B: Bus> Cpu<B> {
         };
 
         if jump {
-            let addr = match self.get_data(addressing_mode) {
-                DataType::Address(addr) => addr,
-                _ => unreachable!("Should only have an address here"),
-            };
+            let addr = self
+                .get_data(addressing_mode)
+                .as_address()
+                .expect("Expected address");
 
             self.state.pc = addr;
         }
@@ -466,10 +496,10 @@ impl<B: Bus> Cpu<B> {
         };
 
         if jump {
-            let addr = match self.get_data(addressing_mode) {
-                DataType::Address(addr) => addr,
-                _ => unreachable!("Should only have an address here"),
-            };
+            let addr = self
+                .get_data(addressing_mode)
+                .as_address()
+                .expect("Expected address");
 
             self.push_stack(self.state.pc.wrapping_add(3));
             self.state.pc = addr;
@@ -502,10 +532,10 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn push_stack_instr(&mut self, addressing_mode: &AddressingMode) {
-        let value = match self.get_data(addressing_mode) {
-            DataType::ValueU16(value) => value,
-            _ => unreachable!("Only expected u16 value here"),
-        };
+        let value = self
+            .get_data(addressing_mode)
+            .as_u16()
+            .expect("Expected u16");
 
         self.push_stack(value);
     }
@@ -513,18 +543,18 @@ impl<B: Bus> Cpu<B> {
     fn pop_stack_instr(&mut self, addressing_mode: &AddressingMode) {
         let value = self.pop_stack();
 
-        match addressing_mode {
-            AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u16(reg, value),
-            _ => unreachable!("Can only pop stack to 16 bit register"),
-        }
+        let AddressingMode::ImmediateRegister(reg) = addressing_mode else {
+            unreachable!("Can only pop stack to 16 bit register")
+        };
+
+        self.set_immediate_register_u16(reg, value)
     }
 
     fn shift(&mut self, addressing_mode: &AddressingMode, direction: Direction, logical: bool) {
-        let value = match self.get_data(addressing_mode) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("Should only have u8 value here"),
-        };
+        let data = self.get_data(addressing_mode);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let (new_val, shifted_out_bit) = match direction {
             Direction::Left => (value << 1, value.get_bit(7)),
@@ -570,11 +600,10 @@ impl<B: Bus> Cpu<B> {
         update_z: bool,
         through_carry: bool,
     ) {
-        let data = match self.get_data(addressing_mode) {
-            DataType::ValueU8(value) => value,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("Expected u8 value here"),
-        };
+        let data = self.get_data(addressing_mode);
+        let data = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let (shifted_out_bit, new_val) = match direction {
             Direction::Left => {
@@ -615,10 +644,10 @@ impl<B: Bus> Cpu<B> {
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, new_val),
             AddressingMode::AddressRegister(_) => {
-                let addr = match self.get_data(addressing_mode) {
-                    DataType::Address(addr) => addr,
-                    _ => unreachable!("Expected addr value here"),
-                };
+                let addr = self
+                    .get_data(addressing_mode)
+                    .as_address()
+                    .expect("Expected address");
 
                 self.write_mem_u8(addr, new_val);
             }
@@ -627,11 +656,10 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn swap(&mut self, addressing_mode: &AddressingMode) {
-        let value = match self.get_data(addressing_mode) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("Expected u8 or addr here"),
-        };
+        let data = self.get_data(addressing_mode);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let hi = value >> 4;
         let lo = value & 0x0F;
@@ -647,10 +675,10 @@ impl<B: Bus> Cpu<B> {
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, new_val),
             AddressingMode::AddressRegister(_) => {
-                let addr = match self.get_data(addressing_mode) {
-                    DataType::Address(addr) => addr,
-                    _ => unreachable!("Expected addr value here"),
-                };
+                let addr = self
+                    .get_data(addressing_mode)
+                    .as_address()
+                    .expect("Expected address");
 
                 self.write_mem_u8(addr, new_val);
             }
@@ -679,11 +707,10 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn add_a_u8(&mut self, rhs: &AddressingMode) {
-        let value = match self.get_data(rhs) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("Should not have any other data type here"),
-        };
+        let data = self.get_data(rhs);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let (sum, half_carry, full_carry) = self.carry_track_add_u8(self.state.a, value);
 
@@ -691,10 +718,7 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn add_hl_u16(&mut self, rhs: &AddressingMode) {
-        let value = match self.get_data(rhs) {
-            DataType::ValueU16(val) => val,
-            _ => unreachable!("Should only have a u16 value here"),
-        };
+        let value = self.get_data(rhs).as_u16().expect("Expected u16");
 
         let hl = self.state.hl();
         let (res, carry) = hl.overflowing_add(value);
@@ -718,15 +742,13 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn add_sp_e8(&mut self, rhs: &AddressingMode) {
-        let value = match self.get_data(rhs) {
-            DataType::ValueI8(val) => i16::from(val),
-            _ => unreachable!("Should only have an i8 here"),
-        };
+        let value = self.get_data(rhs).as_i8().expect("Expected i8");
+        let value = i16::from(value);
 
         let s8 = (value & 127) - (value & 128);
 
         let before = self.state.sp;
-        self.state.sp = (self.state.sp as i16).wrapping_add(value as i16) as u16;
+        self.state.sp = (self.state.sp as i16).wrapping_add(value) as u16;
 
         let full_carry: bool = if value >= 0 {
             ((before as i16 & 0xFF) + s8) > 0xFF
@@ -757,10 +779,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn ld_hl_sp_e8(&mut self, rhs: &AddressingMode) {
-        let value = match self.get_data(rhs) {
-            DataType::ValueI8(val) => i16::from(val),
-            _ => unreachable!("Should only have an i8 here"),
-        };
+        let value = self.get_data(rhs).as_i8().expect("Expected i8");
+        let value = i16::from(value);
 
         self.state
             .set_hl((self.state.sp as i16).wrapping_add(value) as u16);
@@ -785,11 +805,10 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn adc(&mut self, rhs: &AddressingMode) {
-        let value = match self.get_data(rhs) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("expecred u8 here"),
-        };
+        let data = self.get_data(rhs);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let (sum, half_carry_1, carry_1) = self.carry_track_add_u8(self.state.a, value);
         let (sum, half_carry_2, carry_2) = self.carry_track_add_u8(sum, self.state.get_c_flag());
@@ -801,11 +820,10 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn sub_a(&mut self, rhs: &AddressingMode, store_result: bool) {
-        let value = match self.get_data(rhs) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("Should only have u8"),
-        };
+        let data = self.get_data(rhs);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let (diff, half_borrow, borrow) = self.carry_track_sub_u8(self.state.a, value);
 
@@ -831,11 +849,10 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn sbc(&mut self, rhs: &AddressingMode) {
-        let value = match self.get_data(rhs) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("Should only have u8 value here"),
-        };
+        let data = self.get_data(rhs);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let (diff, half_borrow_1, borrow_1) = self.carry_track_sub_u8(self.state.a, value);
         let (diff, half_borrow_2, borrow_2) =
@@ -864,11 +881,10 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn and(&mut self, rhs: &AddressingMode) {
-        let value = match self.get_data(rhs) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("Expected u8 here"),
-        };
+        let data = self.get_data(rhs);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
         let res = self.state.a & value;
 
@@ -882,15 +898,12 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn xor_with_a(&mut self, rhs: &AddressingMode) {
-        let res = match self.get_data(rhs) {
-            DataType::ValueU8(val) => self.state.a ^ val,
-            DataType::Address(addr) => {
-                let val = self.read_mem_u8(addr);
-                val ^ self.state.a
-            }
-            _ => unreachable!("Should only have u8"),
-        };
+        let data = self.get_data(rhs);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
+        let res = self.state.a ^ value;
         self.state.a = res;
         self.state.set_z_flag_from_value(res);
 
@@ -900,13 +913,12 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn or_with_a(&mut self, rhs: &AddressingMode) {
-        let byte = match self.get_data(rhs) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("no other data type should be here"),
-        };
+        let data = self.get_data(rhs);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
 
-        let res = self.state.a | byte;
+        let res = self.state.a | value;
         self.state.a = res;
 
         self.state.set_z_flag_from_value(res);
@@ -917,12 +929,12 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn check_bit(&mut self, bit: u8, addressing_mode: &AddressingMode) {
-        let byte = match self.get_data(addressing_mode) {
-            DataType::ValueU8(val) => val,
-            DataType::Address(addr) => self.read_mem_u8(addr),
-            _ => unreachable!("bit check not yet implemented or dosent exist"),
-        };
-        self.state.set_z_flag_from_value(byte.get_bit(bit));
+        let data = self.get_data(addressing_mode);
+        let value = self
+            .resolve_u8(data)
+            .expect("Expected a type that can be resolved to u8");
+
+        self.state.set_z_flag_from_value(value.get_bit(bit));
         self.state.clear_n_flag();
         self.state.set_h_flag();
     }
@@ -1015,7 +1027,7 @@ impl<B: Bus> Cpu<B> {
         let mut code = self.read_mem_u8(self.state.pc);
         let prefixed = code == 0xcb;
 
-        let (opcode_asm, opcode_bytes, opcode_cycles, lhs, rhs) = {
+        let (_, opcode_bytes, opcode_cycles, lhs, rhs) = {
             let opcode_set = if prefixed {
                 code = self.read_mem_u8(self.state.pc.wrapping_add(1));
                 &self.prefixed_opcodes
