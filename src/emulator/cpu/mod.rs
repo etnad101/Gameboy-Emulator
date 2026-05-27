@@ -12,7 +12,7 @@ use crate::{
     },
     utils::bit_ops::BitOps,
 };
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::Add, rc::Rc};
 enum Direction {
     Left,
     Right,
@@ -110,8 +110,8 @@ impl<B: Bus> Cpu<B> {
         self.memory.borrow().read_u16(addr)
     }
 
-    fn resolve_u8(&self, data: DataType) -> Option<u8> {
-        match data {
+    fn resolve_u8(&self, addressing_mode: &AddressingMode) -> Option<u8> {
+        match self.get_data(addressing_mode) {
             DataType::ValueU8(val) => Some(val),
             DataType::Address(addr) => Some(self.read_mem_u8(addr)),
             _ => None,
@@ -279,9 +279,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn increment_u8(&mut self, addressing_mode: &AddressingMode) {
-        let data = self.get_data(addressing_mode);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(addressing_mode)
             .expect("Expected a type that can be resolved to u8");
 
         let (sum, half_carry, _) = self.carry_track_add_u8(value, 1);
@@ -320,9 +319,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn decrement_u8(&mut self, addressing_mode: &AddressingMode) {
-        let data = self.get_data(addressing_mode);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(addressing_mode)
             .expect("Expected a type that can be resolved to u8");
 
         let (diff, half_borrow, _) = self.carry_track_sub_u8(value, 1);
@@ -362,6 +360,16 @@ impl<B: Bus> Cpu<B> {
         self.set_immediate_register_u16(reg, value)
     }
 
+    fn check_condition(&self, condition: Option<JumpCondition>) -> bool {
+        match condition {
+            Some(JumpCondition::Z) => self.state.get_z_flag() == 1,
+            Some(JumpCondition::NZ) => self.state.get_z_flag() == 0,
+            Some(JumpCondition::C) => self.state.get_c_flag() == 1,
+            Some(JumpCondition::NC) => self.state.get_c_flag() == 0,
+            None => true,
+        }
+    }
+
     fn rel_jump(
         &mut self,
         addressing_mode: &AddressingMode,
@@ -369,39 +377,10 @@ impl<B: Bus> Cpu<B> {
     ) -> usize {
         let offset = self.get_data(addressing_mode).as_i8().expect("Expected i8");
 
-        let mut jump = false;
-        let extra_cycles: usize = match condition {
-            Some(JumpCondition::Z) => {
-                if self.state.get_z_flag() != 0 {
-                    jump = true;
-                };
-                4
-            }
-            Some(JumpCondition::NZ) => {
-                if self.state.get_z_flag() == 0 {
-                    jump = true;
-                };
-                4
-            }
-            Some(JumpCondition::C) => {
-                if self.state.get_c_flag() != 0 {
-                    jump = true;
-                };
-                4
-            }
-            Some(JumpCondition::NC) => {
-                if self.state.get_c_flag() == 0 {
-                    jump = true;
-                };
-                4
-            }
-            None => {
-                jump = true;
-                0
-            }
-        };
-
+        let jump = self.check_condition(condition);
+        let mut extra_cycles = 0;
         if jump {
+            extra_cycles = 4;
             let res: i16 = (self.state.pc as i16).wrapping_add(i16::from(offset));
             self.state.pc = res as u16;
         }
@@ -414,39 +393,11 @@ impl<B: Bus> Cpu<B> {
         addressing_mode: &AddressingMode,
         condition: Option<JumpCondition>,
     ) -> usize {
-        let (jump, extra_cycles) = match condition {
-            Some(JumpCondition::NZ) => {
-                if self.state.get_z_flag() == 0 {
-                    (true, 4)
-                } else {
-                    (false, 0)
-                }
-            }
-            Some(JumpCondition::NC) => {
-                if self.state.get_c_flag() == 0 {
-                    (true, 4)
-                } else {
-                    (false, 0)
-                }
-            }
-            Some(JumpCondition::Z) => {
-                if self.state.get_z_flag() == 1 {
-                    (true, 4)
-                } else {
-                    (false, 0)
-                }
-            }
-            Some(JumpCondition::C) => {
-                if self.state.get_c_flag() == 1 {
-                    (true, 4)
-                } else {
-                    (false, 0)
-                }
-            }
-            None => (true, 0),
-        };
+        let jump = self.check_condition(condition);
+        let mut extra_cycles = 0;
 
         if jump {
+            extra_cycles = 4;
             let addr = self
                 .get_data(addressing_mode)
                 .as_address()
@@ -463,39 +414,11 @@ impl<B: Bus> Cpu<B> {
         addressing_mode: &AddressingMode,
         condition: Option<JumpCondition>,
     ) -> usize {
-        let (jump, extra_cycles) = match condition {
-            Some(JumpCondition::NZ) => {
-                if self.state.get_z_flag() == 0 {
-                    (true, 12)
-                } else {
-                    (false, 0)
-                }
-            }
-            Some(JumpCondition::NC) => {
-                if self.state.get_c_flag() == 0 {
-                    (true, 12)
-                } else {
-                    (false, 0)
-                }
-            }
-            Some(JumpCondition::Z) => {
-                if self.state.get_z_flag() == 1 {
-                    (true, 12)
-                } else {
-                    (false, 0)
-                }
-            }
-            Some(JumpCondition::C) => {
-                if self.state.get_c_flag() == 1 {
-                    (true, 12)
-                } else {
-                    (false, 0)
-                }
-            }
-            None => (true, 0),
-        };
+        let jump = self.check_condition(condition);
+        let mut extra_cycles = 0;
 
         if jump {
+            extra_cycles = 4;
             let addr = self
                 .get_data(addressing_mode)
                 .as_address()
@@ -551,9 +474,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn shift(&mut self, addressing_mode: &AddressingMode, direction: Direction, logical: bool) {
-        let data = self.get_data(addressing_mode);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(addressing_mode)
             .expect("Expected a type that can be resolved to u8");
 
         let (new_val, shifted_out_bit) = match direction {
@@ -600,9 +522,8 @@ impl<B: Bus> Cpu<B> {
         update_z: bool,
         through_carry: bool,
     ) {
-        let data = self.get_data(addressing_mode);
         let data = self
-            .resolve_u8(data)
+            .resolve_u8(addressing_mode)
             .expect("Expected a type that can be resolved to u8");
 
         let (shifted_out_bit, new_val) = match direction {
@@ -656,9 +577,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn swap(&mut self, addressing_mode: &AddressingMode) {
-        let data = self.get_data(addressing_mode);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(addressing_mode)
             .expect("Expected a type that can be resolved to u8");
 
         let hi = value >> 4;
@@ -707,9 +627,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn add_a_u8(&mut self, rhs: &AddressingMode) {
-        let data = self.get_data(rhs);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(rhs)
             .expect("Expected a type that can be resolved to u8");
 
         let (sum, half_carry, full_carry) = self.carry_track_add_u8(self.state.a, value);
@@ -805,9 +724,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn adc(&mut self, rhs: &AddressingMode) {
-        let data = self.get_data(rhs);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(rhs)
             .expect("Expected a type that can be resolved to u8");
 
         let (sum, half_carry_1, carry_1) = self.carry_track_add_u8(self.state.a, value);
@@ -820,9 +738,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn sub_a(&mut self, rhs: &AddressingMode, store_result: bool) {
-        let data = self.get_data(rhs);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(rhs)
             .expect("Expected a type that can be resolved to u8");
 
         let (diff, half_borrow, borrow) = self.carry_track_sub_u8(self.state.a, value);
@@ -849,9 +766,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn sbc(&mut self, rhs: &AddressingMode) {
-        let data = self.get_data(rhs);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(rhs)
             .expect("Expected a type that can be resolved to u8");
 
         let (diff, half_borrow_1, borrow_1) = self.carry_track_sub_u8(self.state.a, value);
@@ -881,9 +797,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn and(&mut self, rhs: &AddressingMode) {
-        let data = self.get_data(rhs);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(rhs)
             .expect("Expected a type that can be resolved to u8");
 
         let res = self.state.a & value;
@@ -898,9 +813,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn xor_with_a(&mut self, rhs: &AddressingMode) {
-        let data = self.get_data(rhs);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(rhs)
             .expect("Expected a type that can be resolved to u8");
 
         let res = self.state.a ^ value;
@@ -913,9 +827,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn or_with_a(&mut self, rhs: &AddressingMode) {
-        let data = self.get_data(rhs);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(rhs)
             .expect("Expected a type that can be resolved to u8");
 
         let res = self.state.a | value;
@@ -929,9 +842,8 @@ impl<B: Bus> Cpu<B> {
     }
 
     fn check_bit(&mut self, bit: u8, addressing_mode: &AddressingMode) {
-        let data = self.get_data(addressing_mode);
         let value = self
-            .resolve_u8(data)
+            .resolve_u8(addressing_mode)
             .expect("Expected a type that can be resolved to u8");
 
         self.state.set_z_flag_from_value(value.get_bit(bit));
