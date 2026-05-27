@@ -11,12 +11,11 @@
 * Move json tests to debugger
 */
 
-#![warn(clippy::all)]
+//#![warn(clippy::all)]
 //#![warn(clippy::pedantic)]
 //#![deny(clippy::unwrap_used)]
 //#![deny(clippy::panic)]
 //#![warn(clippy::cargo)]
-//#![warn(clippy::restriction)]
 
 mod emulator;
 mod gui;
@@ -55,7 +54,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         options,
         Box::new(|_cc| Ok(Box::new(EmulatorGui::new(emulator)))),
     )
-    .unwrap();
+    .expect("Failed to start eframe app");
 
     // Game Boy runs slightly slower than 60 Hz, one frame takes ~16.74ms instead of ~16.67ms
     Ok(())
@@ -69,6 +68,6 @@ mod tests {
     fn test_opcodes() {
         use crate::emulator::RawBus;
         let mut emulator = Emulator::<RawBus>::new();
-        assert!(emulator.run_opcode_tests().unwrap());
+        assert!(emulator.run_opcode_tests().expect("Failed to run tests"));
     }
 }

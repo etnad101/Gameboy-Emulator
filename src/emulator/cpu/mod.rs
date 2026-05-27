@@ -12,7 +12,7 @@ use crate::{
     },
     utils::bit_ops::BitOps,
 };
-use std::{cell::RefCell, collections::HashMap, ops::Add, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 enum Direction {
     Left,
     Right,
@@ -861,9 +861,11 @@ impl<B: Bus> Cpu<B> {
 
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, byte),
-            AddressingMode::AddressRegister(Register::HL) => self.write_mem_u8(addr.unwrap(), byte),
+            AddressingMode::AddressRegister(Register::HL) => {
+                self.write_mem_u8(addr.expect("Expected address"), byte);
+            }
             _ => unreachable!("should not have anything else here"),
-        };
+        }
     }
 
     fn reset_bit(&mut self, bit: u8, addressing_mode: &AddressingMode) {
@@ -876,9 +878,11 @@ impl<B: Bus> Cpu<B> {
 
         match addressing_mode {
             AddressingMode::ImmediateRegister(reg) => self.set_immediate_register_u8(reg, byte),
-            AddressingMode::AddressRegister(Register::HL) => self.write_mem_u8(addr.unwrap(), byte),
+            AddressingMode::AddressRegister(Register::HL) => {
+                self.write_mem_u8(addr.expect("Expected address"), byte);
+            }
             _ => unreachable!("should not have anything else here"),
-        };
+        }
     }
 
     fn daa(&mut self) {
@@ -1008,11 +1012,10 @@ impl<B: Bus> Cpu<B> {
                 0xe8..=0xef => self.set_bit(5, &rhs),
                 0xf0..=0xf7 => self.set_bit(6, &rhs),
                 0xf8..=0xff => self.set_bit(7, &rhs),
-            };
+            }
         } else {
             match code {
-                0x00 => (),
-                0x10 => (),
+                0x00 | 0x10 => (),
                 0x05 | 0x0d | 0x15 | 0x1d | 0x25 | 0x2d | 0x35 | 0x3d => self.decrement_u8(&lhs),
                 0x04 | 0x0c | 0x14 | 0x1c | 0x24 | 0x2c | 0x34 | 0x3c => self.increment_u8(&lhs),
                 0x03 | 0x13 | 0x23 | 0x33 => self.increment_u16(&lhs),
@@ -1195,8 +1198,8 @@ impl<B: Bus> Cpu<B> {
                 0xf3 => self.state.ime = false,
                 0xfb => self.state.ime = true,
                 _ => return Err(self.crash(CpuError::OpcodeNotImplemented(code, false), debug_ctx)),
-            };
-        };
+            }
+        }
 
         if !skip_pc_increase {
             self.state.pc = self.state.pc.wrapping_add(opcode_bytes);
