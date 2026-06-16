@@ -243,7 +243,7 @@ impl<B: Bus> DebugCtx<B> {
         fs::write(path, log).expect("unable to write to file");
     }
 
-    pub fn render_tiles(&mut self) -> FrameBuffer {
+    pub fn render_tiles(&self) -> FrameBuffer {
         let width = 128;
         let height = 192;
         let mut buff = FrameBuffer::new(width, height);
@@ -291,7 +291,7 @@ impl<B: Bus> DebugCtx<B> {
         buff
     }
 
-    pub fn render_background_map(&mut self) -> FrameBuffer {
+    pub fn render_background_map(&self) -> FrameBuffer {
         let width = 32 * 8;
         let height = 32 * 8;
         let mut buff = FrameBuffer::new(width, height);

@@ -13,6 +13,10 @@ use crate::Palette;
 pub struct EmulatorGui {
     emulator: Emulator<DMGBus>,
     emu_screen: EmuScreen,
+    tile_map: EmuScreen,
+    tile_map_shown: bool,
+    background_map: EmuScreen,
+    background_map_shown: bool,
     memory_editor: MemoryEditor,
     run_type: RunType,
     show_debug_screen: bool,
@@ -25,6 +29,10 @@ impl EmulatorGui {
         Self {
             emulator,
             emu_screen: EmuScreen::new(SCREEN_WIDTH, SCREEN_HEIGHT),
+            tile_map: EmuScreen::new(128, 192),
+            tile_map_shown: false,
+            background_map: EmuScreen::new(32 * 8, 32 * 8),
+            background_map_shown: false,
             memory_editor,
             run_type,
             show_debug_screen: false,
@@ -41,13 +49,19 @@ impl eframe::App for EmulatorGui {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("Menu", |ui| {
                     if ui.button("Run").clicked() {
-                        self.emulator.set_run_type(RunType::Frame);
+                        self.emulator.run();
                     }
                     if ui.button("Pause").clicked() {
-                        self.emulator.set_run_type(RunType::Paused);
+                        self.emulator.pause();
                     }
                     if ui.button("Debug Mode").clicked() {
-                        self.show_debug_screen = true;
+                        self.show_debug_screen = !self.show_debug_screen;
+                    }
+                    if ui.button("Tile Map").clicked() {
+                        self.tile_map_shown = !self.tile_map_shown;
+                    }
+                    if ui.button("Bakcground Map").clicked() {
+                        self.background_map_shown = !self.background_map_shown;
                     }
                 });
                 ui.menu_button("File", |ui| {
@@ -75,35 +89,58 @@ impl eframe::App for EmulatorGui {
 
                 if self.show_debug_screen {
                     ui.separator();
-                }
-                ui.vertical(|ui| {
-                    if self.show_debug_screen {
-                        ui.horizontal(|ui| {
-                            ui.label("Debugging screen");
-                            if ui.button("Close").clicked() {
-                                self.show_debug_screen = false;
+                    ui.vertical(|ui| {
+                        if self.show_debug_screen {
+                            ui.horizontal(|ui| {
+                                ui.label("Debugging screen");
+                                if ui.button("Close").clicked() {
+                                    self.show_debug_screen = false;
+                                }
+                            });
+                            if ui.button("Step").clicked() {
+                                self.emulator.set_run_type(RunType::Instr);
+                                self.emu_screen
+                                    .update_texture(&self.emulator.tick().unwrap().rgb(), ctx);
                             }
-                        });
-                        if ui.button("Step").clicked() {
-                            self.emulator.set_run_type(RunType::Instr);
-                            self.emu_screen
-                                .update_texture(&self.emulator.tick().unwrap().rgb(), ctx);
+                            let debug = RefCell::new(self.emulator.debug_ctx_mut());
+                            self.memory_editor.ui(
+                                ui,
+                                |addr| debug.borrow().raw_read(addr),
+                                |addr, value| debug.borrow_mut().raw_write(addr, value),
+                            );
+                            let call_log = self.emulator.debug_ctx().build_call_log();
+                            if let Some(log) = call_log {
+                                ui.label(log);
+                            }
                         }
-                        let debug = RefCell::new(self.emulator.debug_ctx_mut());
-                        self.memory_editor.ui(
-                            ui,
-                            |addr| debug.borrow().raw_read(addr),
-                            |addr, value| debug.borrow_mut().raw_write(addr, value),
-                        );
-                        let call_log = self.emulator.debug_ctx().build_call_log();
-                        if let Some(log) = call_log {
-                            ui.label(log);
-                        }
-                    }
-                });
+                    });
+                }
             });
         });
 
+        if self.tile_map_shown {
+            self.tile_map
+                .update_texture(&self.emulator.debug_ctx().render_tiles().rgb(), ctx);
+            egui::Window::new("Maps").show(ctx, |ui| {
+                self.tile_map.ui(ui);
+                if ui.button("Close").clicked() {
+                    self.tile_map_shown = false;
+                }
+            });
+        }
+
+        if self.background_map_shown {
+            self.background_map.update_texture(
+                &self.emulator.debug_ctx().render_background_map().rgb(),
+                ctx,
+            );
+            egui::Window::new("Maps").show(ctx, |ui| {
+                self.background_map.ui(ui);
+                if ui.button("Close").clicked() {
+                    self.background_map_shown = false;
+                }
+            });
+        }
         ctx.request_repaint();
     }
 }
